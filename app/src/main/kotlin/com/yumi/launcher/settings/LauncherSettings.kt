@@ -1,0 +1,107 @@
+package com.yumi.launcher.settings
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BrightnessAuto
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.yumi.launcher.core.ElySession
+import java.lang.management.ManagementFactory
+import java.util.UUID
+import java.util.prefs.Preferences
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
+
+enum class ThemeMode(val label: String, val icon: ImageVector) {
+    System("Системная", Icons.Rounded.BrightnessAuto),
+    Light("Светлая", Icons.Rounded.LightMode),
+    Dark("Тёмная", Icons.Rounded.DarkMode),
+}
+
+enum class AccountKind(val label: String) { Microsoft("Microsoft"), Offline("Офлайн"), ElyBy("Ely.by") }
+
+/**
+ * How much the island draws. Low is flat shading; High adds Minecraft-style smooth lighting and
+ * shadows cast by the sun or moon; Ultra adds light shafts, horizon haze and moving water.
+ */
+enum class SceneQuality(val label: String) { Low("Низкое"), High("Высокое"), Ultra("Ультра") }
+
+/** What moves the camera: a slow turn, the pointer, or both. */
+enum class SceneMotion(val label: String) { Rotate("Вращение"), Mouse("За мышью"), Both("Вместе") }
+
+/** What the launcher does with itself once the game is up. */
+enum class AfterLaunch(val label: String) { Keep("Оставить"), Minimize("Свернуть"), Close("Закрыть") }
+
+/**
+ * The launcher's own preferences. Kept in `java.util.prefs` — the registry on Windows — until
+ * there is enough of them to deserve a settings file next to the game data. Every property is
+ * Compose state, so a change shows at once and is written through on the spot.
+ */
+class LauncherSettings(private val store: Preferences = Preferences.userRoot().node("com/yumi/launcher")) {
+    var theme by stored("theme", ThemeMode.System, { runCatching { ThemeMode.valueOf(it) }.getOrNull() }, { it.name })
+    var account by stored("account", AccountKind.Offline, { runCatching { AccountKind.valueOf(it) }.getOrNull() }, { it.name })
+    var nick by stored("nick", "", { it }, { it })
+    var memoryMb by stored("memoryMb", defaultMemoryMb(), String::toIntOrNull, Int::toString)
+
+    /** Off: the Java runtime Mojang ships for each version. On: [javaPath], for every version. */
+    var customJava by stored("customJava", false, { it == "true" }, { it.toString() })
+    var javaPath by stored("javaPath", "", { it }, { it })
+    var afterLaunch by stored("afterLaunch", AfterLaunch.Minimize, { runCatching { AfterLaunch.valueOf(it) }.getOrNull() }, { it.name })
+    var selectedInstance by stored("selectedInstance", "", { it }, { it })
+
+    var sceneQuality by stored("sceneQuality", SceneQuality.Ultra, { runCatching { SceneQuality.valueOf(it) }.getOrNull() }, { it.name })
+    var sceneMotion by stored("sceneMotion", SceneMotion.Both, { runCatching { SceneMotion.valueOf(it) }.getOrNull() }, { it.name })
+    var sceneFps by stored("sceneFps", 60, String::toIntOrNull, Int::toString)
+
+    /** A personal CurseForge API key; without one only Modrinth is searched. */
+    var curseForgeKey by stored("curseForgeKey", "", { it }, { it })
+
+    /** Where Minecraft is downloaded to; empty until the player picks it on the first download. */
+    var gameDir by stored("gameDir", "", { it }, { it })
+
+    /** Mojang's EULA, accepted once in the new-server form; every server made after that inherits it. */
+    var serverEulaAccepted by stored("serverEulaAccepted", false, { it == "true" }, { it.toString() })
+
+    // Ely.by: the token pair from signing in, never the password.
+    private var elyAccessToken by stored("elyAccessToken", "", { it }, { it })
+    private var elyClientTokenStored by stored("elyClientToken", "", { it }, { it })
+    private var elyUuid by stored("elyUuid", "", { it }, { it })
+    private var elyName by stored("elyName", "", { it }, { it })
+
+    /** Identifies this launcher to Ely.by; a token is only ever refreshed by the client it was issued to. */
+    val elyClientToken: String
+        get() = elyClientTokenStored.ifEmpty { UUID.randomUUID().toString().replace("-", "").also { elyClientTokenStored = it } }
+
+    var elySession: ElySession?
+        get() = if (elyAccessToken.isEmpty() || elyName.isEmpty()) null else ElySession(elyAccessToken, elyClientToken, elyUuid, elyName)
+        set(value) {
+            elyAccessToken = value?.accessToken.orEmpty()
+            elyUuid = value?.uuid.orEmpty()
+            elyName = value?.name.orEmpty()
+        }
+
+    /** Minecraft's own rule for a player name. */
+    val nickValid: Boolean get() = NICK.matches(nick)
+
+    private fun <T> stored(key: String, default: T, parse: (String) -> T?, format: (T) -> String) = object : ReadWriteProperty<Any?, T> {
+        private val state = mutableStateOf(store.get(key, null)?.let(parse) ?: default)
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T = state.value
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+            state.value = value
+            store.put(key, format(value))
+        }
+    }
+
+    companion object {
+        private val NICK = Regex("^[A-Za-z0-9_]{3,16}$")
+
+        /** Physical memory, for the memory slider's upper end. */
+        val systemMemoryMb: Int = runCatching {
+            ((ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean).totalMemorySize / (1024 * 1024)).toInt()
+        }.getOrDefault(8192)
+
+        /** A quarter of the machine, kept between 2 and 6 GB: modern versions want 2, few packs gain past 6. */
+        private fun defaultMemoryMb(): Int = (systemMemoryMb / 4 / 512 * 512).coerceIn(2048, 6144)
+    }
+}
