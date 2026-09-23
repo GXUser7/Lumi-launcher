@@ -1,6 +1,9 @@
 package com.yumi.launcher.data
 
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 
 /**
  * A server's `server.properties`, edited in place: lines the launcher does not touch — comments,
@@ -9,7 +12,11 @@ import java.io.File
  * survives servers that read the file as Latin-1.
  */
 class ServerProperties(private val file: File) {
-    private val lines: MutableList<String> = if (file.isFile) file.readLines(Charsets.ISO_8859_1).toMutableList() else mutableListOf()
+    private val lines: MutableList<String> = if (file.isFile) {
+        decode(file.readBytes()).lineSequence().toMutableList().apply { if (lastOrNull()?.isEmpty() == true) removeAt(lastIndex) }
+    } else {
+        mutableListOf()
+    }
 
     operator fun get(key: String): String? = lines.firstNotNullOfOrNull { line ->
         parse(line)?.takeIf { it.first == key }?.second
@@ -27,6 +34,21 @@ class ServerProperties(private val file: File) {
     fun save() {
         file.parentFile.mkdirs()
         file.writeText(lines.joinToString("\n", postfix = "\n"), Charsets.ISO_8859_1)
+    }
+
+    /**
+     * New servers rewrite the file in plain UTF-8 on every start, old ones in Latin-1 with escapes.
+     * UTF-8 first, as the game itself reads it: Latin-1 text is almost never valid UTF-8, while
+     * UTF-8 read as Latin-1 turns «сервер» into «ÑÐµÑ€Ð²ÐµÑ€».
+     */
+    private fun decode(bytes: ByteArray): String = try {
+        Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes))
+            .toString()
+    } catch (e: CharacterCodingException) {
+        String(bytes, Charsets.ISO_8859_1)
     }
 
     private fun parse(line: String): Pair<String, String>? {
