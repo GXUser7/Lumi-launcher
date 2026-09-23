@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.ui.theme.YumiLightColors
 
 /** A section label above a group of controls. */
 @Composable
@@ -122,10 +123,10 @@ val PackIcons: List<ImageVector> = listOf(
     Icons.Rounded.Pets,
 )
 
-/** A pack's tile: its glyph on one of the scheme's three container tones, picked by the glyph. */
+/** A pack's tile keeps the original Glacier colours even when the surrounding theme changes. */
 @Composable
 fun PackTile(icon: Int, size: Dp, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
+    val scheme = YumiLightColors
     val (container, content) = when (icon % 3) {
         0 -> scheme.primaryContainer to scheme.onPrimaryContainer
         1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
