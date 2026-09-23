@@ -208,7 +208,7 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
             save()
         }
         save(profile)
-        if (profile.loader != Loader.Vanilla) syncMods(profile)
+        if (profile.loader != Loader.Vanilla || model.instances.folder(pack).resolve("server").isDirectory) syncMods(profile)
         return profile
     }
 
@@ -232,7 +232,7 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
         val pack = model.instances[profile.packId] ?: return
         val updated = profile.copy(version = pack.version, loader = pack.loader, loaderVersion = pack.loaderVersion)
         save(updated)
-        if (updated.loader != Loader.Vanilla) syncMods(updated)
+        if (updated.loader != Loader.Vanilla || model.instances.folder(pack).resolve("server").isDirectory) syncMods(updated)
     }
 
     fun start(id: String) {
@@ -393,7 +393,9 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
         syncing = profile.id
         scope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { ServerMods.sync(model.instances.modsDir(pack), modsDir(profile), profile.syncedMods.toSet()) }
+                val result = withContext(Dispatchers.IO) {
+                    ServerMods.sync(model.instances.modsDir(pack), modsDir(profile), profile.syncedMods.toSet(), model.instances.folder(pack).resolve("server"))
+                }
                 this@ServerManager[profile.id]?.let { save(it.copy(syncedMods = result.copied)) }
                 val titles = model.mods.titles(pack)
                 val skipped = result.clientOnly.map { titles[it.name] ?: it.name.removeSuffix(".jar") }

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.ViewInAr
@@ -85,6 +86,7 @@ import com.yumi.launcher.ui.home.PackRequest
 /** Where the packs screen is: the list, one pack's editor, or the editor's version picker. */
 private sealed interface Mode {
     data object List : Mode
+    data object Import : Mode
     data class Edit(val draft: Draft) : Mode
     data class PickVersion(val draft: Draft) : Mode
 }
@@ -134,6 +136,7 @@ fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: (
     LaunchedEffect(request) {
         when (request) {
             PackRequest.Create -> mode = Mode.Edit(Draft.new(model.manifest?.latest?.release, model.instances.all.size % PackIcons.size))
+            PackRequest.Import -> mode = Mode.Import
             is PackRequest.Edit -> model.instances[request.id]?.let { mode = Mode.Edit(Draft.of(it)) }
             null -> Unit
         }
@@ -148,9 +151,11 @@ fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: (
             Mode.List -> PackList(
                 model,
                 onCreate = { mode = Mode.Edit(Draft.new(model.manifest?.latest?.release, model.instances.all.size % PackIcons.size)) },
+                onImport = { mode = Mode.Import },
                 onEdit = { mode = Mode.Edit(Draft.of(it)) },
                 onPlay = onPlay,
             )
+            Mode.Import -> PackImportScreen(model) { mode = Mode.List }
             is Mode.Edit -> PackEditor(
                 model,
                 current.draft,
@@ -167,11 +172,17 @@ fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: (
 }
 
 @Composable
-private fun PackList(model: LauncherModel, onCreate: () -> Unit, onEdit: (Instance) -> Unit, onPlay: (Instance) -> Unit) {
+private fun PackList(model: LauncherModel, onCreate: () -> Unit, onImport: () -> Unit, onEdit: (Instance) -> Unit, onPlay: (Instance) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Сборки", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = onImport) {
+                Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("Готовые сборки")
+            }
+            Spacer(Modifier.width(8.dp))
             Button(onClick = onCreate, shapes = ButtonDefaults.shapes()) {
                 Icon(Icons.Rounded.Add, null, Modifier.size(20.dp))
                 Spacer(Modifier.width(6.dp))
