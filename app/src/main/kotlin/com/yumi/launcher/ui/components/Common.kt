@@ -1,6 +1,8 @@
 package com.yumi.launcher.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,16 +29,20 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.data.Instance
 import com.yumi.launcher.ui.theme.YumiLightColors
 
 /** A section label above a group of controls. */
@@ -133,6 +139,25 @@ fun PackTile(icon: Int, size: Dp, modifier: Modifier = Modifier) {
         else -> scheme.secondaryContainer to scheme.onSecondaryContainer
     }
     ShapeTile(PackIcons[icon.coerceIn(0, PackIcons.lastIndex)], container, content, size, modifier)
+}
+
+/** A pack's tile: the picture its catalogue gave it, once loaded, and its glyph until then or without one. */
+@Composable
+fun PackTile(instance: Instance, size: Dp, modifier: Modifier = Modifier) {
+    val url = instance.iconUrl
+    val image by produceState(url?.let(ImageCache::memory), url) {
+        if (url != null && value == null) value = ImageCache.load(url)
+    }
+    val bitmap = image
+    if (bitmap == null) PackTile(instance.icon, size, modifier)
+    else Image(bitmap, null, modifier.size(size).clip(RoundedCornerShape(size * 0.3f)), contentScale = ContentScale.Crop)
+}
+
+/** "259,5 млн", "12 тыс.", "640" — download counts at a glance. */
+fun compactCount(n: Long): String = when {
+    n >= 1_000_000 -> "%.1f млн".format(n / 1_000_000.0).replace('.', ',')
+    n >= 1_000 -> "${n / 1000} тыс."
+    else -> n.toString()
 }
 
 /** "4 ГБ", "2,5 ГБ". */

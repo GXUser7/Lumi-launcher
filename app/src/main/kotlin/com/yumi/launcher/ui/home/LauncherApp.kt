@@ -256,7 +256,7 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
 private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instance?, String?) -> Unit, modifier: Modifier) {
     val target = when (state.section) {
         Section.Home -> 440.dp
-        Section.Mods, Section.Servers -> 620.dp
+        Section.Mods, Section.Packs, Section.Servers -> 620.dp
         else -> 520.dp
     }
     val width by animateDpAsState(target, spring(dampingRatio = 0.8f, stiffness = 380f))

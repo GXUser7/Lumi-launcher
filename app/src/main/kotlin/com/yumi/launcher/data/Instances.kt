@@ -20,6 +20,8 @@ data class Instance(
     /** Null until the first launch picks the newest stable release; pinned from then on. */
     val loaderVersion: String? = null,
     val icon: Int = 0,
+    /** A modpack's own picture from its catalogue; the glyph at [icon] is shown while it loads, or without it. */
+    val iconUrl: String? = null,
     val memoryMb: Int? = null,
     val jvmArgs: String = "",
     val width: Int? = null,

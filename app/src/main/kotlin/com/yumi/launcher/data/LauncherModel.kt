@@ -60,6 +60,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val servers = ServerManager(this, scope)
     val quickJoin = QuickJoinList(scope)
     val ely = ElyAccount(settings, scope)
+    val packImports = PackImporter(this, scope)
 
     var manifest by mutableStateOf<VersionManifest?>(null)
         private set

@@ -136,7 +136,8 @@ private fun launcher(args: Array<String>) = application {
                     settings.account = AccountKind.Offline
                     shot("home-$suffix", 4000) { state.section = Section.Home }
                     shot("packs-$suffix", 2500) { state.section = Section.Packs }
-                    shot("pack-import-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
+                    shot("pack-import-$suffix", 3000) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
+                    shot("pack-editor-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Edit("smoke-fabric") }
                     shot("mods-$suffix", 5000) { state.section = Section.Mods }
                     shot("settings-$suffix", 1200) { state.section = Section.Settings }
                     shot("servers-$suffix", 1200) {

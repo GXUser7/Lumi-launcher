@@ -10,8 +10,8 @@ import com.yumi.launcher.core.Download
 import com.yumi.launcher.core.Http
 import com.yumi.launcher.core.HttpRefused
 import com.yumi.launcher.core.LauncherJson
-import com.yumi.launcher.core.Loader
 import com.yumi.launcher.core.ModCatalog
+import com.yumi.launcher.core.ModDetails
 import com.yumi.launcher.core.ModHit
 import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.core.Modrinth
@@ -93,6 +93,15 @@ class ModManager(private val model: LauncherModel, private val scope: CoroutineS
             }
         }
     }
+
+    /** [hit]'s page in its own catalogue — description, pictures, tags; null when it cannot be had. */
+    suspend fun details(hit: ModHit): ModDetails? = runCatching {
+        val catalog = when (hit.source) {
+            ModSource.Modrinth -> Modrinth
+            ModSource.CurseForge -> CurseForge(model.settings.curseForgeKey.trim())
+        }
+        catalog.details(hit.id)
+    }.getOrNull()
 
     fun isInstalled(hit: ModHit): Boolean = installed.any { it.meta?.source == hit.source && it.meta.projectId == hit.id }
 

@@ -394,7 +394,7 @@ internal fun PackField(model: LauncherModel, pack: Instance?, onPick: (Instance)
             modifier = Modifier.fillMaxWidth().height(64.dp),
         ) {
             Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (pack != null) PackTile(pack.icon, 44.dp)
+                if (pack != null) PackTile(pack, 44.dp)
                 Column(Modifier.weight(1f)) {
                     Text(pack?.name ?: "Нет сборок", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (pack != null) Text("${pack.loader.label} ${pack.version}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
@@ -406,7 +406,7 @@ internal fun PackField(model: LauncherModel, pack: Instance?, onPick: (Instance)
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { Text("${instance.name} · ${instance.loader.label} ${instance.version}") },
-                    leadingIcon = { PackTile(instance.icon, 32.dp) },
+                    leadingIcon = { PackTile(instance, 32.dp) },
                     onClick = { onPick(instance); open = false },
                 )
             }

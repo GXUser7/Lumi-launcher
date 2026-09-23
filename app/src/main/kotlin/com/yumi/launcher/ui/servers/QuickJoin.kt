@@ -240,7 +240,7 @@ private fun PackChip(model: LauncherModel, pack: Instance?, onPick: (Instance) -
     Box {
         Surface(onClick = { open = true }, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Row(Modifier.padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (pack != null) PackTile(pack.icon, 24.dp)
+                if (pack != null) PackTile(pack, 24.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(pack?.let { "${it.name} · ${it.version}" } ?: "Нет сборки", style = MaterialTheme.typography.labelMedium, maxLines = 1)
                 Icon(Icons.Rounded.UnfoldMore, "Сборка для входа", Modifier.size(16.dp))
@@ -252,7 +252,7 @@ private fun PackChip(model: LauncherModel, pack: Instance?, onPick: (Instance) -
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { Text("${instance.name} · ${instance.loader.label} ${instance.version}") },
-                    leadingIcon = { PackTile(instance.icon, 28.dp) },
+                    leadingIcon = { PackTile(instance, 28.dp) },
                     onClick = { onPick(instance); open = false },
                 )
             }

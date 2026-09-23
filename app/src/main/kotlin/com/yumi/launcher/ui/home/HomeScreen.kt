@@ -195,7 +195,7 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
             modifier = Modifier.fillMaxWidth().height(68.dp),
         ) {
             Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (selected != null) PackTile(selected.icon, 48.dp) else ShapeTile(Icons.Rounded.Add, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+                if (selected != null) PackTile(selected, 48.dp) else ShapeTile(Icons.Rounded.Add, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
                 Column(Modifier.weight(1f)) {
                     Text(selected?.name ?: "Создайте сборку", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
@@ -213,7 +213,7 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { PackMenuText(instance) },
-                    leadingIcon = { PackTile(instance.icon, 36.dp) },
+                    leadingIcon = { PackTile(instance, 36.dp) },
                     trailingIcon = { if (instance.id == selected?.id) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
                     onClick = { model.select(instance); open = false },
                 )

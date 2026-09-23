@@ -1,6 +1,24 @@
 package com.yumi.launcher.ui.mods
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.rounded.Computer
+import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Gavel
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Sell
+import androidx.compose.material.icons.rounded.Update
+import androidx.compose.runtime.produceState
+import com.yumi.launcher.core.ModDetails
+import com.yumi.launcher.ui.components.InfoChip
+import com.yumi.launcher.ui.components.RemoteImage
+import com.yumi.launcher.ui.components.compactCount
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,16 +113,32 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
     }
     LaunchedEffect(mods.query, mods.source, pack?.id) { catalogList.scrollToItem(0) }
 
-    val hit = selectedHit
-    if (hit != null && pack != null) {
-        ModDetail(model, pack, hit, onBack = { selectedHit = null })
-        return
+    AnimatedContent(
+        targetState = selectedHit?.takeIf { pack != null },
+        contentKey = { it?.let { hit -> "${hit.source}:${hit.id}" } },
+        transitionSpec = { fadeIn(tween(200, delayMillis = 70)) togetherWith fadeOut(tween(70)) },
+    ) { hit ->
+        if (hit != null && pack != null) ModDetail(model, pack, hit, onBack = { selectedHit = null })
+        else ModsList(model, pack, tab, { tab = it }, catalogList, onPickPack = { packId = it.id }, onEditPack = onEditPack, onOpen = { selectedHit = it })
     }
+}
 
+@Composable
+private fun ModsList(
+    model: LauncherModel,
+    pack: Instance?,
+    tab: Tab,
+    onTab: (Tab) -> Unit,
+    catalogList: LazyListState,
+    onPickPack: (Instance) -> Unit,
+    onEditPack: (Instance) -> Unit,
+    onOpen: (ModHit) -> Unit,
+) {
+    val mods = model.mods
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Моды", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
-            PackPicker(model, pack) { packId = it.id }
+            PackPicker(model, pack, onPickPack)
         }
         when {
             pack == null -> Hint("Сначала создайте сборку — моды ставятся в неё.")
@@ -114,7 +148,7 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
                     Tab.entries.forEachIndexed { i, t ->
                         ToggleButton(
                             checked = tab == t,
-                            onCheckedChange = { tab = t },
+                            onCheckedChange = { onTab(t) },
                             shapes = connectedShapes(i, Tab.entries.size),
                             colors = choiceColors(),
                             modifier = Modifier.weight(1f).height(44.dp),
@@ -122,7 +156,7 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
                     }
                 }
                 mods.notice?.let { Notice(it) { mods.notice = null } }
-                if (tab == Tab.Catalog) Catalog(model, pack, catalogList) { selectedHit = it } else Installed(model, pack)
+                if (tab == Tab.Catalog) Catalog(model, pack, catalogList, onOpen) else Installed(model, pack)
             }
         }
     }
@@ -134,7 +168,7 @@ private fun PackPicker(model: LauncherModel, pack: Instance?, onPick: (Instance)
     Box {
         Surface(onClick = { open = true }, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Row(Modifier.padding(start = 6.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (pack != null) PackTile(pack.icon, 32.dp)
+                if (pack != null) PackTile(pack, 32.dp)
                 Spacer(Modifier.width(8.dp))
                 Column {
                     Text(pack?.name ?: "Нет сборок", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
@@ -147,7 +181,7 @@ private fun PackPicker(model: LauncherModel, pack: Instance?, onPick: (Instance)
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { Text("${instance.name} · ${instance.loader.label} ${instance.version}") },
-                    leadingIcon = { PackTile(instance.icon, 32.dp) },
+                    leadingIcon = { PackTile(instance, 32.dp) },
                     onClick = { onPick(instance); open = false },
                 )
             }
@@ -186,7 +220,7 @@ private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListSta
                     shapes = connectedShapes(i, ModSource.entries.size),
                     colors = choiceColors(),
                     contentPadding = PaddingValues(horizontal = 12.dp),
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(56.dp),
                 ) { Text(source.label, style = MaterialTheme.typography.labelLarge) }
             }
         }
@@ -233,7 +267,7 @@ private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onOpen:
                     }
                 }
                 Text(hit.description, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("↓ ${downloads(hit.downloads)}", style = MaterialTheme.typography.labelMedium, color = scheme.outline)
+                Text("↓ ${compactCount(hit.downloads)}", style = MaterialTheme.typography.labelMedium, color = scheme.outline)
             }
             when {
                 installing -> LoadingIndicator(Modifier.size(40.dp))
@@ -248,45 +282,137 @@ private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onOpen:
     }
 }
 
+/**
+ * One mod's page: what it is and who made it, installing it without going back to the list, then
+ * its pictures, tags, where it is needed, and the author's own description.
+ */
 @Composable
 private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack: () -> Unit) {
     val mods = model.mods
     val scheme = MaterialTheme.colorScheme
     val installing = mods.installing["${hit.source}:${hit.id}"] == true
     val installed = mods.isInstalled(hit)
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val details by produceState<ModDetails?>(null, hit.source, hit.id) { value = mods.details(hit) }
+    var loaded by remember(hit.id) { mutableStateOf(false) }
+    LaunchedEffect(details) { if (details != null) loaded = true }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад к каталогу") }
-            Spacer(Modifier.width(8.dp))
-            Text("О моде", style = MaterialTheme.typography.displaySmall)
+            Spacer(Modifier.width(4.dp))
+            Text(hit.title, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
-        Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().weight(1f)) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    RemoteIcon(hit.iconUrl, Icons.Rounded.Extension, 64.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(hit.title, style = MaterialTheme.typography.titleLarge)
-                        if (hit.author.isNotBlank()) Text("Автор: ${hit.author}", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(shape = RoundedCornerShape(28.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RemoteIcon(hit.iconUrl, Icons.Rounded.Extension, 76.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                InfoChip(hit.source.label, icon = Icons.Rounded.Extension, container = scheme.primaryContainer, content = scheme.onPrimaryContainer)
+                                InfoChip(compactCount(hit.downloads), icon = Icons.Rounded.Download)
+                                if (hit.author.isNotBlank()) InfoChip(hit.author, icon = Icons.Rounded.Person)
+                            }
+                            Text(hit.description.ifBlank { "Автор не добавил описание." }, style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        when {
+                            installed -> FilledTonalButton(onClick = {}, enabled = false, shapes = ButtonDefaults.shapes()) {
+                                Icon(Icons.Rounded.Check, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Установлен в «${pack.name}»", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            else -> Button(onClick = { mods.install(pack, hit) }, enabled = !installing, shapes = ButtonDefaults.shapes()) {
+                                if (installing) LoadingIndicator(Modifier.size(20.dp), color = scheme.onPrimary)
+                                else Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (installing) "Устанавливаем…" else "Установить в «${pack.name}»", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }) {
+                            Icon(Icons.Rounded.OpenInNew, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Страница")
+                        }
+                    }
+                    Hint("Для ${pack.loader.label} ${pack.version}. Нужные ему моды поставятся сами.")
                 }
-                Text(hit.description.ifBlank { "Автор не добавил описание." }, style = MaterialTheme.typography.bodyMedium)
-                Text("${hit.source.label} · ${pack.loader.label} ${pack.version}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                Text("Загрузок: ${downloads(hit.downloads)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }) { Text("Страница проекта") }
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            val info = details
             when {
-                installing -> LoadingIndicator(Modifier.size(40.dp))
-                installed -> Text("Установлен", style = MaterialTheme.typography.labelLarge, color = scheme.primary)
-                else -> Button(onClick = { mods.install(pack, hit) }, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Установить")
+                info == null && !loaded -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                info == null -> Unit
+                else -> {
+                    if (info.gallery.isNotEmpty()) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            info.gallery.take(8).forEach { url -> RemoteImage(url, Modifier.size(width = 236.dp, height = 133.dp)) }
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        sideChip("Клиент", info.client)?.let { InfoChip(it, icon = Icons.Rounded.Computer) }
+                        sideChip("Сервер", info.server)?.let { InfoChip(it, icon = Icons.Rounded.Dns) }
+                        info.categories.mapNotNull(::categoryLabel).distinct().forEach { InfoChip(it, icon = Icons.Rounded.Sell) }
+                        if (info.updated.isNotBlank()) InfoChip("Обновлён ${info.updated.split('-').reversed().joinToString(".")}", icon = Icons.Rounded.Update)
+                        info.license?.let { InfoChip(it, icon = Icons.Rounded.Gavel) }
+                    }
+                    if (info.body.isNotBlank()) Description(info.body)
                 }
             }
         }
     }
+}
+
+/** The author's long description, folded to its start until asked for the rest. */
+@Composable
+private fun Description(text: String) {
+    val scheme = MaterialTheme.colorScheme
+    var open by remember(text) { mutableStateOf(false) }
+    val long = text.length > 900
+    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Описание", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (long && !open) text.take(900).substringBeforeLast(' ') + "…" else text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+            if (long) TextButton(onClick = { open = !open }) { Text(if (open) "Свернуть" else "Показать полностью") }
+        }
+    }
+}
+
+/** "Клиент: нужен" — only when the catalogue says; "unknown" says nothing. */
+private fun sideChip(side: String, value: String?): String? = when (value) {
+    "required" -> "$side: нужен"
+    "optional" -> "$side: по желанию"
+    "unsupported" -> "$side: не нужен"
+    else -> null
+}
+
+/** Modrinth's category slugs in Russian; loaders are left out — the pack already has one. */
+private fun categoryLabel(slug: String): String? = when (slug.lowercase()) {
+    "fabric", "forge", "neoforge", "quilt", "liteloader", "modloader", "rift", "datapack", "minecraft" -> null
+    "adventure" -> "Приключения"
+    "cursed" -> "Странное"
+    "decoration" -> "Декор"
+    "economy" -> "Экономика"
+    "equipment" -> "Снаряжение"
+    "food" -> "Еда"
+    "game-mechanics" -> "Механики"
+    "library" -> "Библиотека"
+    "magic" -> "Магия"
+    "management" -> "Управление"
+    "minigame" -> "Мини-игры"
+    "mobs" -> "Мобы"
+    "optimization" -> "Оптимизация"
+    "social" -> "Общение"
+    "storage" -> "Хранение"
+    "technology" -> "Технологии"
+    "transportation" -> "Транспорт"
+    "utility" -> "Утилиты"
+    "worldgen" -> "Генерация мира"
+    else -> slug.replaceFirstChar { it.uppercase() }
 }
 
 @Composable
@@ -369,9 +495,3 @@ private fun Notice(text: String, onClose: () -> Unit) {
 @Composable
 private fun Hint(text: String, modifier: Modifier = Modifier) =
     Text(text, modifier, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-private fun downloads(n: Long): String = when {
-    n >= 1_000_000 -> "%.1f млн".format(n / 1_000_000.0).replace('.', ',')
-    n >= 1_000 -> "${n / 1000} тыс."
-    else -> n.toString()
-}
