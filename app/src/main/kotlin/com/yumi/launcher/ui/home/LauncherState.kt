@@ -33,6 +33,7 @@ enum class PlayState { Idle, Launching, Running }
 /** Something another screen asked the packs screen to open with. */
 sealed interface PackRequest {
     data object Create : PackRequest
+    data object Import : PackRequest
     data class Edit(val id: String) : PackRequest
 }
 

@@ -17,7 +17,7 @@ internal object ServerMods {
      * earlier sync put there: those the pack no longer has are taken out again, while mods added to
      * the server by hand, and ones switched off there, are left alone.
      */
-    suspend fun sync(from: File, to: File, previously: Set<String>): Result {
+    suspend fun sync(from: File, to: File, previously: Set<String>, staged: File? = null): Result {
         val jars = from.listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".jar") }
         val clientOnly = clientOnly(jars)
         to.mkdirs()
@@ -29,11 +29,21 @@ internal object ServerMods {
             if (to.resolve(jar.name + ".disabled").exists()) continue
             if (!target.isFile || target.length() != jar.length()) jar.copyTo(target, overwrite = true)
         }
+        staged?.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.forEach { file ->
+            val path = file.relativeTo(staged).invariantSeparatorsPath
+            if (path in setOf("eula.txt", "server.properties", "yumi-server.json")) return@forEach
+            val target = to.parentFile.resolve(path)
+            target.parentFile.mkdirs()
+            if (!target.isFile || (path.startsWith("mods/") && target.length() != file.length())) {
+                file.copyTo(target, overwrite = true)
+            }
+            if (path.startsWith("mods/") && file.name.endsWith(".jar")) copied += file.name
+        }
         for (name in previously - copied.toSet()) {
             to.resolve(name).delete()
             to.resolve("$name.disabled").delete()
         }
-        return Result(copied, clientOnly.sortedBy { it.name.lowercase() })
+        return Result(copied.distinct(), clientOnly.sortedBy { it.name.lowercase() })
     }
 
     private suspend fun clientOnly(jars: List<File>): Set<File> {

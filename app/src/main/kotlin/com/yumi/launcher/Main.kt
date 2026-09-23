@@ -18,17 +18,21 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.yumi.launcher.core.LauncherPaths
+import com.yumi.launcher.core.PackArchives
+import com.yumi.launcher.core.ServerMods
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.settings.Palette
 import com.yumi.launcher.settings.ThemeMode
 import com.yumi.launcher.ui.home.LauncherApp
 import com.yumi.launcher.ui.home.LauncherState
+import com.yumi.launcher.ui.home.PackRequest
 import com.yumi.launcher.ui.home.Section
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
 import com.yumi.launcher.ui.theme.LauncherTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import java.awt.Dimension
 import java.awt.Rectangle
 import java.awt.Robot
@@ -43,10 +47,30 @@ fun main(args: Array<String>) {
         "--launch-test" -> exitProcess(launchTest(args.drop(1)))
         "--server-test" -> exitProcess(serverTest(args.drop(1)))
         "--ping-test" -> exitProcess(pingTest(args.drop(1)))
+        "--pack-test" -> exitProcess(packTest(args.drop(1)))
     }
     // Native-looking Swing dialogs: the folder chooser is Swing's, and its default look is from 2006.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     launcher(args)
+}
+
+private fun packTest(args: List<String>): Int = runBlocking {
+    if (args.size < 2) {
+        println("Использование: --pack-test <архив.mrpack|архив.zip> <тестовая папка> [ключ CurseForge]")
+        return@runBlocking 2
+    }
+    try {
+        val archive = File(args[0])
+        val folder = File(args[1])
+        val info = PackArchives.inspect(archive)
+        PackArchives.install(archive, folder, args.getOrNull(2).orEmpty()) {}
+        ServerMods.sync(folder.resolve("minecraft/mods"), folder.resolve("hosted/mods"), emptySet(), folder.resolve("server"))
+        println("${info.name}: ${info.loader.label} ${info.version}, клиент=${folder.resolve("minecraft").walkTopDown().count { it.isFile }}, сервер=${folder.resolve("hosted").walkTopDown().count { it.isFile }}")
+        0
+    } catch (e: Exception) {
+        System.err.println("Импорт не удался: ${e.message}")
+        1
+    }
 }
 
 private fun launcher(args: Array<String>) = application {
@@ -103,6 +127,9 @@ private fun launcher(args: Array<String>) = application {
                     state.section = Section.Packs
                     delay(1200)
                     shoot("packs-$suffix")
+                    state.packRequest = PackRequest.Import
+                    delay(1400)
+                    shoot("pack-import-$suffix")
                     state.section = Section.Mods
                     delay(5000)
                     shoot("mods-$suffix")
