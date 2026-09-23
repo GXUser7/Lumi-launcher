@@ -48,6 +48,13 @@ export GRADLE_USER_HOME=C:/Users/000/.gradle   # тёплый кэш YumiDesktop
 ./gradlew :app:run
 ```
 
+Ярлык на рабочем столе, который запускает лаунчер из исходников без консоли (иконка Yumi; при
+ошибке сборки покажет путь к `.local/demo.log`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\make-shortcut.ps1
+```
+
 Проверки:
 
 - `--args="--ui-smoke"` — снимает все экраны (главная, сборки, моды, настройки, серверы, вход

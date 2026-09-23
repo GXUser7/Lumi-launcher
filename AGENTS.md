@@ -216,6 +216,10 @@ app/src/main/kotlin/com/yumi/launcher/
 - Он часто набирает текст в английской раскладке. Восстанавливай раскладку сам и не переспрашивай:
   `pfgei` → «запуш», `pfgecnb ltvj` → «запусти демо», `gjlcjtlbyb ubn` → «подсоедини гит».
 - «Запусти демо» = `./gradlew --offline :app:run` в фоне (с `source` и `GRADLE_USER_HOME` выше).
+  У владельца есть и ярлык «Yumi Launcher (демо)» на рабочем столе: `scripts/run-demo.vbs` →
+  `scripts/run-demo.cmd` (без консоли, лог в `.local/demo.log`); пересоздать —
+  `scripts/make-shortcut.ps1`. В среде агента задана `NoDefaultCurrentDirectoryInExePath=1`:
+  в `.cmd` вызывай программы по полному пути, текущая папка не просматривается.
 - В ответе: что сделано, что проверено и чем, что не проверено. Без воды.
 
 ## Что ещё не сделано
