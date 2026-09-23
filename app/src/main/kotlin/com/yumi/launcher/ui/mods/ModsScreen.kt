@@ -1,5 +1,7 @@
 package com.yumi.launcher.ui.mods
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,10 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.Check
@@ -62,6 +67,8 @@ import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.RemoteIcon
 import com.yumi.launcher.ui.components.choiceColors
 import com.yumi.launcher.ui.components.connectedShapes
+import java.awt.Desktop
+import java.net.URI
 
 private enum class Tab(val label: String) { Catalog("Каталог"), Installed("Установлено") }
 
@@ -76,11 +83,21 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
     var packId by remember { mutableStateOf(model.selected?.id) }
     val pack = model.instances[packId] ?: model.selected
     var tab by remember { mutableStateOf(Tab.Catalog) }
+    var selectedHit by remember { mutableStateOf<ModHit?>(null) }
+    val catalogList = rememberLazyListState()
 
     LaunchedEffect(pack?.id, pack?.loader, pack?.version) {
+        selectedHit = null
         if (pack == null) return@LaunchedEffect
         mods.refresh(pack)
         if (pack.loader != Loader.Vanilla) mods.search(pack)
+    }
+    LaunchedEffect(mods.query, mods.source, pack?.id) { catalogList.scrollToItem(0) }
+
+    val hit = selectedHit
+    if (hit != null && pack != null) {
+        ModDetail(model, pack, hit, onBack = { selectedHit = null })
+        return
     }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -104,7 +121,7 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
                     }
                 }
                 mods.notice?.let { Notice(it) { mods.notice = null } }
-                if (tab == Tab.Catalog) Catalog(model, pack) else Installed(model, pack)
+                if (tab == Tab.Catalog) Catalog(model, pack, catalogList) { selectedHit = it } else Installed(model, pack)
             }
         }
     }
@@ -149,7 +166,7 @@ private fun NeedsLoader(pack: Instance, onEdit: () -> Unit) {
 }
 
 @Composable
-private fun Catalog(model: LauncherModel, pack: Instance) {
+private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListState, onOpen: (ModHit) -> Unit) {
     val mods = model.mods
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
@@ -181,11 +198,15 @@ private fun Catalog(model: LauncherModel, pack: Instance) {
         return
     }
     mods.searchError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.error) }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(mods.results, key = { "${it.source}:${it.id}" }) { hit ->
-            HitRow(hit, installing = mods.installing["${hit.source}:${hit.id}"] == true, installed = mods.isInstalled(hit)) {
-                mods.install(pack, hit)
-            }
+            HitRow(
+                hit,
+                installing = mods.installing["${hit.source}:${hit.id}"] == true,
+                installed = mods.isInstalled(hit),
+                onOpen = { onOpen(hit) },
+                onInstall = { mods.install(pack, hit) },
+            )
         }
         item {
             Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
@@ -200,9 +221,9 @@ private fun Catalog(model: LauncherModel, pack: Instance) {
 }
 
 @Composable
-private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onInstall: () -> Unit) {
+private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onOpen: () -> Unit, onInstall: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = onOpen, shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             RemoteIcon(hit.iconUrl, Icons.Rounded.Extension, 52.dp)
             Column(Modifier.weight(1f)) {
@@ -220,6 +241,47 @@ private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onInsta
                 installing -> LoadingIndicator(Modifier.size(40.dp))
                 installed -> Icon(Icons.Rounded.Check, "Установлен", tint = scheme.primary, modifier = Modifier.padding(horizontal = 10.dp))
                 else -> FilledTonalButton(onClick = onInstall, shapes = ButtonDefaults.shapes(), contentPadding = PaddingValues(horizontal = 14.dp)) {
+                    Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Установить")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack: () -> Unit) {
+    val mods = model.mods
+    val scheme = MaterialTheme.colorScheme
+    val installing = mods.installing["${hit.source}:${hit.id}"] == true
+    val installed = mods.isInstalled(hit)
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад к каталогу") }
+            Spacer(Modifier.width(8.dp))
+            Text("О моде", style = MaterialTheme.typography.displaySmall)
+        }
+        Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    RemoteIcon(hit.iconUrl, Icons.Rounded.Extension, 64.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(hit.title, style = MaterialTheme.typography.titleLarge)
+                        if (hit.author.isNotBlank()) Text("Автор: ${hit.author}", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    }
+                }
+                Text(hit.description.ifBlank { "Автор не добавил описание." }, style = MaterialTheme.typography.bodyMedium)
+                Text("${hit.source.label} · ${pack.loader.label} ${pack.version}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                Text("Загрузок: ${downloads(hit.downloads)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }) { Text("Страница проекта") }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            when {
+                installing -> LoadingIndicator(Modifier.size(40.dp))
+                installed -> Text("Установлен", style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+                else -> Button(onClick = { mods.install(pack, hit) }, shapes = ButtonDefaults.shapes()) {
                     Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Установить")
