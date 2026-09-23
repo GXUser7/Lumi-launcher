@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.AssistChip
@@ -78,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yumi.launcher.core.Loader
 import com.yumi.launcher.data.Difficulty
+import com.yumi.launcher.data.BannedPlayer
 import com.yumi.launcher.data.GameMode
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
@@ -102,14 +104,14 @@ import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.File
 
-private enum class DetailTab(val label: String) { Console("Терминал"), Settings("Настройки"), Mods("Моды") }
+private enum class DetailTab(val label: String) { Console("Терминал"), Settings("Настройки"), Bans("Баны"), Mods("Моды") }
 
 /** One server: power, the addresses to give friends, and its terminal, settings and mods. */
 @Composable
 internal fun ServerDetail(model: LauncherModel, profile: ServerProfile, onBack: () -> Unit, onJoin: (Instance?, String) -> Unit) {
     val session = model.servers.session(profile.id)
-    var tab by remember { mutableStateOf(DetailTab.Console) }
-    val tabs = if (profile.loader == Loader.Vanilla) listOf(DetailTab.Console, DetailTab.Settings) else DetailTab.entries
+    var tab by remember(profile.id) { mutableStateOf(DetailTab.Console) }
+    val tabs = if (profile.loader == Loader.Vanilla) listOf(DetailTab.Console, DetailTab.Settings, DetailTab.Bans) else DetailTab.entries
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Header(profile.name, onBack) { PowerButton(model, profile, session) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -131,7 +133,48 @@ internal fun ServerDetail(model: LauncherModel, profile: ServerProfile, onBack: 
             when (tab) {
                 DetailTab.Console -> Terminal(model, profile, session)
                 DetailTab.Settings -> ServerSettings(model, profile, session, onDeleted = onBack)
+                DetailTab.Bans -> BannedPlayers(model, profile)
                 DetailTab.Mods -> ServerMods(model, profile, session)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BannedPlayers(model: LauncherModel, profile: ServerProfile) {
+    val scheme = MaterialTheme.colorScheme
+    var refresh by remember(profile.id) { mutableIntStateOf(0) }
+    val result by produceState<Result<List<BannedPlayer>>?>(null, profile.id, refresh) {
+        value = withContext(Dispatchers.IO) { runCatching { model.servers.bannedPlayers(profile) } }
+    }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Забаненные игроки", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { refresh++ }) {
+                Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Обновить")
+            }
+        }
+        val players = result?.getOrNull()
+        when {
+            result == null -> Hint("Читаем список блокировок…")
+            players == null -> Hint("Не удалось прочитать список блокировок — проверьте banned-players.json в папке сервера.")
+            players.isEmpty() -> Hint("Забаненных игроков нет.")
+            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(players, key = { it.name }) { player ->
+                    Surface(shape = RoundedCornerShape(18.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(player.name, style = MaterialTheme.typography.titleSmall)
+                            Text(player.reason.ifBlank { "Причина не указана" }, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                if (player.expires.equals("forever", ignoreCase = true)) "Срок: бессрочно" else "До ${player.expires}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

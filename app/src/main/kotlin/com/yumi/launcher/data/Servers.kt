@@ -62,6 +62,14 @@ data class ServerProfile(
     val signature: String get() = "$version|$loader|${loaderVersion.orEmpty()}"
 }
 
+/** Minecraft's banned-players.json entry; other fields are left to the server. */
+@Serializable
+data class BannedPlayer(
+    val name: String,
+    val reason: String = "",
+    val expires: String = "forever",
+)
+
 sealed interface ServerStatus {
     data object Stopped : ServerStatus
     data class Installing(val step: String, val fraction: Float) : ServerStatus
@@ -156,6 +164,11 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
     fun modsDir(profile: ServerProfile): File = folder(profile).resolve("mods")
     fun properties(profile: ServerProfile) = ServerProperties(folder(profile).resolve("server.properties"))
     fun port(profile: ServerProfile): Int = properties(profile).int("server-port", 25565)
+
+    fun bannedPlayers(profile: ServerProfile): List<BannedPlayer> {
+        val file = folder(profile).resolve("banned-players.json")
+        return if (file.isFile) LauncherJson.decodeFromString(file.readText()) else emptyList()
+    }
 
     fun session(id: String): ServerSession = synchronized(sessions) { sessions.getOrPut(id) { ServerSession() } }
 
