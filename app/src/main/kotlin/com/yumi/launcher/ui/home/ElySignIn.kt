@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Pin
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
@@ -19,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.ElyBy
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.settings.AccountKind
+import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.ModalCard
 import java.awt.Desktop
 import java.net.URI
@@ -88,44 +90,41 @@ fun ElySignIn(model: LauncherModel, onClose: () -> Unit) {
                 true
             } else false
         }
-        OutlinedTextField(
+        Field(
             value = login,
             onValueChange = { login = it.trim() },
-            label = { Text("Ник или e-mail") },
-            singleLine = true,
+            label = "Ник или e-mail",
+            icon = Icons.Rounded.Person,
             enabled = !ely.busy,
-            shape = RoundedCornerShape(16.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth().then(enter),
         )
-        OutlinedTextField(
+        Field(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Пароль") },
-            singleLine = true,
+            label = "Пароль",
+            icon = Icons.Rounded.Lock,
             enabled = !ely.busy,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
+            trailing = {
                 IconButton(onClick = { shown = !shown }) {
                     Icon(if (shown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (shown) "Скрыть пароль" else "Показать пароль")
                 }
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
-            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().then(enter),
         )
         AnimatedVisibility(ely.needsCode) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(
+                Field(
                     value = code,
                     onValueChange = { code = it.filter(Char::isDigit).take(6) },
-                    label = { Text("Код из приложения") },
-                    placeholder = { Text("123456") },
-                    singleLine = true,
+                    label = "Код из приложения",
+                    placeholder = "123456",
+                    icon = Icons.Rounded.Pin,
                     enabled = !ely.busy,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth().focusRequester(codeFocus).then(enter),
                 )
                 Text(

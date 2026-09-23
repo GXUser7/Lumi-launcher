@@ -28,7 +28,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,7 +41,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -63,7 +62,9 @@ import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ModEntry
+import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.PackTile
+import com.yumi.launcher.ui.components.SearchField
 import com.yumi.launcher.ui.components.RemoteIcon
 import com.yumi.launcher.ui.components.choiceColors
 import com.yumi.launcher.ui.components.connectedShapes
@@ -171,13 +172,10 @@ private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListSta
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
+        SearchField(
             value = mods.query,
             onValueChange = { mods.query = it; mods.search(pack, debounce = true) },
-            placeholder = { Text("Поиск: sodium, jei, create…") },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            singleLine = true,
-            shape = CircleShape,
+            placeholder = "Поиск: sodium, jei, create…",
             modifier = Modifier.weight(1f),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
@@ -342,12 +340,11 @@ private fun CurseForgeKey(model: LauncherModel, pack: Instance) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Нужен ключ CurseForge", style = MaterialTheme.typography.titleLarge)
             Hint("CurseForge пускает лаунчеры только с личным ключом. Он бесплатный: войдите на console.curseforge.com, раздел API Keys, скопируйте ключ и вставьте сюда. Modrinth работает без ключа.")
-            OutlinedTextField(
+            Field(
                 value = key,
                 onValueChange = { key = it.trim() },
-                label = { Text("Ключ API") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                label = "Ключ API",
+                icon = Icons.Rounded.Key,
                 modifier = Modifier.fillMaxWidth(),
             )
             Button(

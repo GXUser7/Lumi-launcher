@@ -2,13 +2,13 @@ package com.yumi.launcher.ui.servers
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,7 +37,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,7 +51,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
@@ -60,24 +58,18 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.yumi.launcher.core.MotdSpan
 import com.yumi.launcher.core.PingResult
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PingState
 import com.yumi.launcher.data.SavedServer
+import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.ShapeTile
+import com.yumi.launcher.ui.components.Tip
 import org.jetbrains.skia.Image as SkiaImage
 
 /** Other people's servers: add by address, see who is on, join with a pack in one click. */
@@ -93,12 +85,11 @@ internal fun QuickJoinPane(model: LauncherModel, onJoin: (Instance?, String) -> 
     }
     LaunchedEffect(Unit) { list.pingAll() }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
+        Field(
             value = address,
             onValueChange = { address = it.trim().take(120) },
-            placeholder = { Text("Адрес сервера: play.example.net") },
-            leadingIcon = { Icon(Icons.Rounded.Dns, null) },
-            singleLine = true,
+            placeholder = "Адрес сервера: play.example.net",
+            icon = Icons.Rounded.Dns,
             shape = CircleShape,
             modifier = Modifier.weight(1f).onPreviewKeyEvent {
                 if (it.type == KeyEventType.KeyDown && (it.key == Key.Enter || it.key == Key.NumPadEnter)) {
@@ -107,13 +98,15 @@ internal fun QuickJoinPane(model: LauncherModel, onJoin: (Instance?, String) -> 
                 } else false
             },
         )
-        Button(onClick = add, enabled = address.isNotBlank(), shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(top = 6.dp)) {
+        Button(onClick = add, enabled = address.isNotBlank(), shapes = ButtonDefaults.shapes(), modifier = Modifier.height(48.dp)) {
             Icon(Icons.Rounded.Add, null, Modifier.size(20.dp))
             Spacer(Modifier.width(6.dp))
             Text("Добавить")
         }
-        IconButton(onClick = list::pingAll, enabled = list.all.isNotEmpty(), modifier = Modifier.padding(top = 6.dp)) {
-            Icon(Icons.Rounded.Refresh, "Обновить все")
+        Tip("Обновить все") {
+            FilledTonalIconButton(onClick = list::pingAll, enabled = list.all.isNotEmpty(), shapes = IconButtonDefaults.shapes()) {
+                Icon(Icons.Rounded.Refresh, "Обновить все")
+            }
         }
     }
     if (list.all.isEmpty()) {
@@ -143,11 +136,10 @@ private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: Ping
                 Favicon((ping as? PingState.Online)?.result?.favicon, 52.dp)
                 Column(Modifier.weight(1f)) {
                     if (renaming) {
-                        OutlinedTextField(
+                        Field(
                             value = draft,
                             onValueChange = { draft = it.take(40) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            placeholder = "Название",
                             modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
                                 if (it.type == KeyEventType.KeyDown && (it.key == Key.Enter || it.key == Key.NumPadEnter)) {
                                     list.update(server.copy(name = draft.trim().ifEmpty { server.address }))
@@ -169,7 +161,7 @@ private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: Ping
                     colors = IconButtonDefaults.filledIconButtonColors(),
                 ) { Icon(Icons.Rounded.PlayArrow, "Играть на «${server.name}»") }
             }
-            if (ping is PingState.Online && ping.result.motd.isNotEmpty()) Motd(ping.result.motd)
+            if (ping is PingState.Online && ping.result.motd.isNotEmpty()) MotdStrip(ping.result.motd)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PackChip(model, pack) { list.update(server.copy(packId = it.id)) }
                 versionMismatch(ping, pack)?.let { warning ->
@@ -239,33 +231,6 @@ private fun SignalBars(latency: Long) {
                 cornerRadius = CornerRadius(1.5f, 1.5f),
             )
         }
-    }
-}
-
-/** The description in its own colours, on the dark strip it was designed for. */
-@Composable
-private fun Motd(spans: List<MotdSpan>) {
-    val text = buildAnnotatedString {
-        spans.forEach { span ->
-            withStyle(
-                SpanStyle(
-                    color = Color(0xFF000000 or (span.color ?: 0xAAAAAA).toLong()),
-                    fontWeight = if (span.bold) FontWeight.Bold else null,
-                    fontStyle = if (span.italic) FontStyle.Italic else null,
-                ),
-            ) { append(span.text) }
-        }
-    }
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF16181C)).padding(horizontal = 12.dp, vertical = 8.dp)) {
-        // Servers centre their descriptions with spaces, which only lines up in an evenly spaced font.
-        Text(
-            text,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 

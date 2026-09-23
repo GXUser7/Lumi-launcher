@@ -29,6 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.DriveFileRenameOutline
+import androidx.compose.material.icons.rounded.Lan
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.UnfoldMore
@@ -42,7 +45,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -72,11 +74,16 @@ import com.yumi.launcher.data.ServerSession
 import com.yumi.launcher.data.ServerStatus
 import com.yumi.launcher.data.active
 import com.yumi.launcher.ui.components.ChoiceGroup
+import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.FieldShape
+import com.yumi.launcher.ui.components.FormSection
+import com.yumi.launcher.ui.components.LocalFieldContainer
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.Label
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.home.LauncherState
+import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
 import com.yumi.launcher.ui.packs.MemorySlider
@@ -107,10 +114,13 @@ fun ServersScreen(model: LauncherModel, state: LauncherState, onJoin: (Instance?
             current == "create" -> CreateServer(
                 model,
                 onBack = { state.serverView = ServerView.List },
-                onCreated = { state.serverView = ServerView.Detail(it.id) },
+                onCreated = {
+                    state.serverTab = ServerTab.Console
+                    state.serverView = ServerView.Detail(it.id)
+                },
             )
             current.startsWith("server:") -> model.servers[current.removePrefix("server:")]?.let { profile ->
-                ServerDetail(model, profile, onBack = { state.serverView = ServerView.List }, onJoin = onJoin)
+                ServerDetail(model, profile, state.serverTab, { state.serverTab = it }, onBack = { state.serverView = ServerView.List }, onJoin = onJoin)
             }
             else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("Серверы", style = MaterialTheme.typography.displaySmall)
@@ -119,7 +129,10 @@ fun ServersScreen(model: LauncherModel, state: LauncherState, onJoin: (Instance?
                     HostedList(
                         model,
                         onCreate = { state.serverView = ServerView.Create },
-                        onOpen = { state.serverView = ServerView.Detail(it.id) },
+                        onOpen = {
+                            state.serverTab = ServerTab.Console
+                            state.serverView = ServerView.Detail(it.id)
+                        },
                     )
                 } else {
                     QuickJoinPane(model, onJoin)
@@ -271,57 +284,69 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
     val portValue = port.toIntOrNull()?.takeIf { it in 1024..65535 }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Header("Новый сервер", onBack)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it.take(40) },
-                label = { Text("Название") },
-                placeholder = { Text("Сервер для друзей") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Label("Сборка")
-            PackField(model, pack) { packId = it.id }
-            Hint(
-                when {
-                    pack == null -> "Сначала создайте сборку — сервер повторяет её версию и моды."
-                    pack.loader == Loader.Vanilla -> "Ванильный сервер Minecraft ${pack.version}."
-                    else -> "Сервер получит Minecraft ${pack.version}, ${pack.loader.label} и моды сборки — кроме тех, что нужны только игроку: Sodium, Iris, миникарты."
-                },
-            )
-            Label("Кто может зайти")
-            ChoiceGroup(ServerAuth.entries, auth, { it.label }, { auth = it })
-            Hint(auth.hint)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = port,
-                    onValueChange = { port = it.filter(Char::isDigit).take(5) },
-                    label = { Text("Порт") },
-                    singleLine = true,
-                    isError = portValue == null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.width(140.dp),
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FormSection("Сервер", Icons.Rounded.Dns, subtitle = "Повторяет сборку: ту же версию, загрузчик и моды") {
+                Field(
+                    value = name,
+                    onValueChange = { name = it.take(40) },
+                    label = "Название",
+                    placeholder = "Сервер для друзей",
+                    icon = Icons.Rounded.DriveFileRenameOutline,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Hint("25565 — стандартный: друзьям не нужно дописывать его к адресу.", Modifier.weight(1f))
-            }
-            Label("Память сервера")
-            MemorySlider(memory) { memory = it }
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { eula = !eula }.padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = eula, onCheckedChange = { eula = it })
-                Text(
-                    buildAnnotatedString {
-                        append("Я принимаю ")
-                        withStyle(SpanStyle(color = scheme.primary, textDecoration = TextDecoration.Underline)) { append("лицензионное соглашение Minecraft") }
-                        append(" — без него сервер не запускается")
+                PackField(model, pack) { packId = it.id }
+                Hint(
+                    when {
+                        pack == null -> "Сначала создайте сборку — сервер повторяет её версию и моды."
+                        pack.loader == Loader.Vanilla -> "Ванильный сервер Minecraft ${pack.version}."
+                        else -> "Сервер получит Minecraft ${pack.version}, ${pack.loader.label} и моды сборки — кроме тех, что нужны только игроку: Sodium, Iris, миникарты."
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f).clickable { runCatching { Desktop.getDesktop().browse(URI("https://aka.ms/MinecraftEULA")) } },
                 )
+            }
+            FormSection("Подключение", Icons.Rounded.Lan) {
+                Label("Кто может зайти")
+                ChoiceGroup(ServerAuth.entries, auth, { it.label }, { auth = it }, height = 44.dp)
+                Hint(auth.hint)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Field(
+                        value = port,
+                        onValueChange = { port = it.filter(Char::isDigit).take(5) },
+                        label = "Порт",
+                        icon = Icons.Rounded.Lan,
+                        isError = portValue == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.width(170.dp),
+                    )
+                    Hint(
+                        if (portValue == null) "Порт — число от 1024 до 65535."
+                        else "25565 — стандартный: друзьям не нужно дописывать его к адресу. Второму серверу нужен другой.",
+                        Modifier.weight(1f),
+                    )
+                }
+            }
+            FormSection("Ресурсы", Icons.Rounded.Memory) {
+                Label("Память сервера")
+                MemorySlider(memory) { memory = it }
+                Hint("Ванильному хватает 2 ГБ, сборке с модами — от 4 ГБ.")
+            }
+            Surface(
+                onClick = { eula = !eula },
+                shape = RoundedCornerShape(24.dp),
+                color = if (eula) scheme.primaryContainer else scheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(Modifier.padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = eula, onCheckedChange = { eula = it })
+                    Text(
+                        buildAnnotatedString {
+                            append("Я принимаю ")
+                            withStyle(SpanStyle(color = scheme.primary, textDecoration = TextDecoration.Underline)) { append("лицензионное соглашение Minecraft") }
+                            append(" — без него сервер не запускается")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f).clickable { runCatching { Desktop.getDesktop().browse(URI("https://aka.ms/MinecraftEULA")) } },
+                    )
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -335,9 +360,22 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                 },
                 enabled = name.isNotBlank() && pack != null && eula && portValue != null,
                 shapes = ButtonDefaults.shapes(),
-            ) { Text("Создать") }
+                modifier = Modifier.height(48.dp),
+            ) {
+                Icon(Icons.Rounded.Add, null, Modifier.size(20.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Создать сервер")
+            }
             Spacer(Modifier.width(12.dp))
-            if (!eula) Hint("Отметьте согласие с EULA", Modifier.weight(1f))
+            Hint(
+                when {
+                    name.isBlank() -> "Придумайте название"
+                    pack == null -> "Нужна сборка"
+                    !eula -> "Отметьте согласие с EULA"
+                    else -> "Скачается при первом запуске"
+                },
+                Modifier.weight(1f),
+            )
         }
     }
 }
@@ -351,8 +389,8 @@ internal fun PackField(model: LauncherModel, pack: Instance?, onPick: (Instance)
         Surface(
             onClick = { open = true },
             enabled = model.instances.all.isNotEmpty(),
-            shape = RoundedCornerShape(22.dp),
-            color = scheme.surfaceContainer,
+            shape = FieldShape,
+            color = LocalFieldContainer.current ?: scheme.surfaceContainer,
             modifier = Modifier.fillMaxWidth().height(64.dp),
         ) {
             Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

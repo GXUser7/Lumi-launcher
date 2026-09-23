@@ -44,11 +44,11 @@ import com.yumi.launcher.ui.theme.YumiLightColors
 fun Label(text: String, modifier: Modifier = Modifier) =
     Text(text, modifier, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-/** A choice among a few options: neutral until picked, primary once it is. */
+/** A choice among a few options: neutral until picked, primary once it is. On a form card, a tone up. */
 @Composable
 fun choiceColors() = MaterialTheme.colorScheme.let {
     ToggleButtonDefaults.toggleButtonColors(
-        containerColor = it.surfaceContainerHigh,
+        containerColor = LocalFieldContainer.current ?: it.surfaceContainerHigh,
         contentColor = it.onSurface,
         checkedContainerColor = it.primary,
         checkedContentColor = it.onPrimary,

@@ -20,6 +20,8 @@ import androidx.compose.ui.window.rememberWindowState
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.PackArchives
 import com.yumi.launcher.core.ServerMods
+import com.yumi.launcher.data.LauncherModel
+import com.yumi.launcher.data.ServerStatus
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.settings.Palette
@@ -28,6 +30,7 @@ import com.yumi.launcher.ui.home.LauncherApp
 import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.home.PackRequest
 import com.yumi.launcher.ui.home.Section
+import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
 import com.yumi.launcher.ui.theme.LauncherTheme
@@ -92,7 +95,11 @@ private fun launcher(args: Array<String>) = application {
                     resolve("yumi-server.json").writeText(
                         """{"id":"smoke-server","name":"Сервер для друзей","packId":"smoke-fabric","version":"1.21.1","loader":"Fabric","memoryMb":4096}""",
                     )
-                    resolve("server.properties").writeText("server-port=25565\nmotd=Yumi\n")
+                    resolve("server.properties").writeText("server-port=25565\nmotd=§bYumi §7— §aвыживание с друзьями\nmax-players=10\n")
+                    resolve("banned-players.json").writeText(
+                        """[{"uuid":"00000000-0000-0000-0000-000000000001","name":"Griefer228","created":"2026-09-20 18:04:11 +0500","source":"Server","expires":"forever","reason":"Сломал спавн"},""" +
+                            """{"uuid":"00000000-0000-0000-0000-000000000002","name":"Spammer","created":"2026-09-22 10:00:00 +0500","source":"Steve","expires":"2026-10-12 14:00:00 +0500","reason":"Banned by an operator."}]""",
+                    )
                 }
                 LauncherPaths.config.resolve("servers.json").apply { parentFile.mkdirs() }.writeText(
                     """[{"id":"hypixel","name":"Hypixel","address":"mc.hypixel.net"},{"id":"friend","name":"Сервер Димы","address":"127.0.0.1:25599"}]""",
@@ -103,6 +110,7 @@ private fun launcher(args: Array<String>) = application {
     val windowState = rememberWindowState(width = 1280.dp, height = 800.dp, position = WindowPosition(Alignment.Center))
     val icon = remember(::launcherIcon)
     var smokeState by remember { mutableStateOf<LauncherState?>(null) }
+    var smokeModel by remember { mutableStateOf<LauncherModel?>(null) }
     // Alt+F4 and the taskbar's "close" go through the launcher, which may have servers to stop first.
     var closeRequests by remember { mutableIntStateOf(0) }
     Window(onCloseRequest = { closeRequests++ }, state = windowState, title = "Yumi", icon = icon, undecorated = true) {
@@ -112,51 +120,77 @@ private fun launcher(args: Array<String>) = application {
                 window.isAlwaysOnTop = true
                 window.toFront()
                 val output = File(".local/screenshots").also(File::mkdirs)
-                fun shoot(name: String) {
+                // `--only=server` photographs just the shots whose names contain "server" — quicker while working on one screen.
+                val only = args.firstOrNull { it.startsWith("--only=") }?.removePrefix("--only=")
+                val state = smokeState!!
+                suspend fun shot(name: String, wait: Long, setup: () -> Unit) {
+                    if (only != null && only !in name) return
+                    setup()
+                    delay(wait)
                     val area = Rectangle(window.contentPane.locationOnScreen, window.contentPane.size)
                     ImageIO.write(Robot().createScreenCapture(area), "png", File(output, "$name.png"))
                 }
-                val state = smokeState!!
                 for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {
                     val suffix = theme.name.lowercase()
                     settings.theme = theme
                     settings.account = AccountKind.Offline
-                    state.section = Section.Home
-                    delay(4000)
-                    shoot("home-$suffix")
-                    state.section = Section.Packs
-                    delay(1200)
-                    shoot("packs-$suffix")
-                    state.packRequest = PackRequest.Import
-                    delay(1400)
-                    shoot("pack-import-$suffix")
-                    state.section = Section.Mods
-                    delay(5000)
-                    shoot("mods-$suffix")
-                    state.section = Section.Settings
-                    delay(1200)
-                    shoot("settings-$suffix")
-                    state.section = Section.Servers
+                    shot("home-$suffix", 4000) { state.section = Section.Home }
+                    shot("packs-$suffix", 2500) { state.section = Section.Packs }
+                    shot("pack-import-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
+                    shot("mods-$suffix", 5000) { state.section = Section.Mods }
+                    shot("settings-$suffix", 1200) { state.section = Section.Settings }
+                    shot("servers-$suffix", 1200) {
+                        state.section = Section.Servers
+                        state.serversTab = ServersTab.Hosted
+                        state.serverView = ServerView.List
+                    }
+                    shot("server-detail-$suffix", 1500) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.Detail("smoke-server")
+                        state.serverTab = ServerTab.Console
+                    }
+                    // A server that seems to be up, with a command half-typed: the terminal's suggestions.
+                    val session = smokeModel?.servers?.session("smoke-server")
+                    shot("server-terminal-$suffix", 1500) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.Detail("smoke-server")
+                        state.serverTab = ServerTab.Console
+                        session?.status = ServerStatus.Running(System.currentTimeMillis() - 754_000)
+                        session?.lines?.apply { clear(); addAll(SMOKE_LOG) }
+                        session?.players?.apply { clear(); addAll(listOf("Steve", "Alex")) }
+                        session?.draft = "gam"
+                    }
+                    session?.status = ServerStatus.Stopped
+                    session?.lines?.clear()
+                    session?.players?.clear()
+                    session?.draft = ""
+                    shot("server-settings-$suffix", 1500) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.Detail("smoke-server")
+                        state.serverTab = ServerTab.Settings
+                    }
+                    shot("server-bans-$suffix", 1500) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.Detail("smoke-server")
+                        state.serverTab = ServerTab.Bans
+                    }
+                    shot("server-create-$suffix", 1200) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.Create
+                    }
+                    shot("quick-join-$suffix", 6000) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.List
+                        state.serversTab = ServersTab.QuickJoin
+                    }
+                    shot("ely-signin-$suffix", 1500) {
+                        state.section = Section.Home
+                        settings.account = AccountKind.ElyBy
+                        state.elySignIn = true
+                    }
+                    state.elySignIn = false
                     state.serversTab = ServersTab.Hosted
                     state.serverView = ServerView.List
-                    delay(1200)
-                    shoot("servers-$suffix")
-                    state.serverView = ServerView.Detail("smoke-server")
-                    delay(1500)
-                    shoot("server-detail-$suffix")
-                    state.serverView = ServerView.Create
-                    delay(1200)
-                    shoot("server-create-$suffix")
-                    state.serverView = ServerView.List
-                    state.serversTab = ServersTab.QuickJoin
-                    delay(6000)
-                    shoot("quick-join-$suffix")
-                    state.section = Section.Home
-                    settings.account = AccountKind.ElyBy
-                    state.elySignIn = true
-                    delay(1500)
-                    shoot("ely-signin-$suffix")
-                    state.elySignIn = false
                 }
                 // Each pastel palette, on the screens that show the most of it.
                 settings.account = AccountKind.Offline
@@ -165,12 +199,13 @@ private fun launcher(args: Array<String>) = application {
                     for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {
                         val suffix = "${palette.name.lowercase()}-${theme.name.lowercase()}"
                         settings.theme = theme
-                        state.section = Section.Home
-                        delay(1500)
-                        shoot("palette-home-$suffix")
-                        state.section = Section.Settings
-                        delay(1000)
-                        shoot("palette-settings-$suffix")
+                        shot("palette-home-$suffix", 1500) { state.section = Section.Home }
+                        shot("palette-settings-$suffix", 1000) { state.section = Section.Settings }
+                        shot("palette-server-settings-$suffix", 1500) {
+                            state.section = Section.Servers
+                            state.serverView = ServerView.Detail("smoke-server")
+                            state.serverTab = ServerTab.Settings
+                        }
                     }
                 }
                 Preferences.userRoot().node("com/yumi/launcher-smoke").removeNode()
@@ -183,10 +218,26 @@ private fun launcher(args: Array<String>) = application {
             ThemeMode.Dark -> true
         }
         LauncherTheme(dark, settings.palette) {
-            LauncherApp(windowState, settings, dark, onClose = ::exitApplication, closeRequests = closeRequests, onState = { smokeState = it })
+            LauncherApp(
+                windowState, settings, dark, onClose = ::exitApplication, closeRequests = closeRequests,
+                onState = { navigation, model -> smokeState = navigation; smokeModel = model },
+            )
         }
     }
 }
+
+/** What the smoke run's terminal shows: a server that has just come up and two friends joining it. */
+private val SMOKE_LOG = listOf(
+    "[12:00:01] [Server thread/INFO]: Starting minecraft server version 1.21.1",
+    "[12:00:02] [Server thread/INFO]: Loading properties",
+    "[12:00:02] [Server thread/INFO]: Default game type: SURVIVAL",
+    "[12:00:04] [Server thread/INFO]: Preparing level \"world\"",
+    "[12:00:09] [Server thread/INFO]: Done (7.412s)! For help, type \"help\"",
+    "[12:03:40] [Server thread/INFO]: Steve joined the game",
+    "[12:05:12] [Server thread/INFO]: Alex joined the game",
+    "> list",
+    "[12:05:30] [Server thread/INFO]: There are 2 of a max of 10 players online: Steve, Alex",
+)
 
 /** Same loader as YumiDesktop: the classpath SVG API is deprecated but one file does not justify the resources plugin. */
 @Suppress("DEPRECATION")

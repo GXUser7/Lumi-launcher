@@ -1,6 +1,9 @@
 package com.yumi.launcher.ui.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -99,12 +102,12 @@ fun FrameWindowScope.LauncherApp(
     dark: Boolean,
     onClose: () -> Unit,
     closeRequests: Int = 0,
-    /** Hands the navigation state out once — for the smoke run, which drives it screen by screen. */
-    onState: (LauncherState) -> Unit = {},
+    /** Hands the navigation state and the model out once — for the smoke run, which drives them screen by screen. */
+    onState: (LauncherState, LauncherModel) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
     val model = remember { LauncherModel(settings, scope) }
-    val state = remember { LauncherState().also(onState) }
+    val state = remember { LauncherState().also { onState(it, model) } }
     val parallax = remember { Parallax() }
 
     // A running server has no window of its own: closing the launcher asks first, then stops it properly.
@@ -164,7 +167,16 @@ fun FrameWindowScope.LauncherApp(
                 TopBar(model, state, windowState, requestClose)
             }
             ScreenCard(model, state, play, Modifier.padding(start = 16.dp, top = 88.dp, bottom = 16.dp))
-            NewsCarousel(state.news, { state.news = it }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+            // Only the home screen has news; elsewhere the corner belongs to the island, where the
+            // camera has flown to that section's place.
+            AnimatedVisibility(
+                state.section == Section.Home,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                enter = fadeIn(tween(300, delayMillis = 250)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it / 3 },
+                exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { it / 3 },
+            ) {
+                NewsCarousel(state.news, { state.news = it })
+            }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
