@@ -4,8 +4,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -204,7 +203,6 @@ private fun PowerButton(model: LauncherModel, profile: ServerProfile, session: S
 }
 
 /** Where friends connect to, one click to copy each; and a way in for the host. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddressCard(model: LauncherModel, profile: ServerProfile, session: ServerSession, onJoin: (Instance?, String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
@@ -221,7 +219,7 @@ private fun AddressCard(model: LauncherModel, profile: ServerProfile, session: S
         Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Адрес для друзей", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     addresses.forEach { address ->
                         val text = if (port == 25565) address.ip else "${address.ip}:$port"
                         AssistChip(
@@ -229,8 +227,14 @@ private fun AddressCard(model: LauncherModel, profile: ServerProfile, session: S
                                 Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
                                 copied = text
                             },
-                            label = { Text(if (copied == text) "Скопировано" else "$text · ${address.network}") },
-                            leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(AssistChipDefaults.IconSize)) },
+                            label = { Text("$text · ${address.network}") },
+                            leadingIcon = {
+                                Icon(
+                                    if (copied == text) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+                                    if (copied == text) "Скопировано" else "Скопировать",
+                                    Modifier.size(AssistChipDefaults.IconSize),
+                                )
+                            },
                         )
                     }
                 }
