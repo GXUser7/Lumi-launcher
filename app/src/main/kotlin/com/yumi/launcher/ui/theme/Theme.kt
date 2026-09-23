@@ -12,11 +12,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.settings.Palette
 
 @Composable
-fun LauncherTheme(dark: Boolean, content: @Composable () -> Unit) {
+fun LauncherTheme(dark: Boolean, palette: Palette, content: @Composable () -> Unit) {
     MaterialExpressiveTheme(
-        colorScheme = if (dark) YumiDarkColors else YumiLightColors,
+        colorScheme = colorScheme(palette, dark),
         typography = YumiTypography,
         motionScheme = MotionScheme.expressive(),
         content = content,

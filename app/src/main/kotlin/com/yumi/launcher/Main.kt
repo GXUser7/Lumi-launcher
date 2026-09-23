@@ -20,6 +20,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.LauncherSettings
+import com.yumi.launcher.settings.Palette
 import com.yumi.launcher.settings.ThemeMode
 import com.yumi.launcher.ui.home.LauncherApp
 import com.yumi.launcher.ui.home.LauncherState
@@ -130,6 +131,21 @@ private fun launcher(args: Array<String>) = application {
                     shoot("ely-signin-$suffix")
                     state.elySignIn = false
                 }
+                // Each pastel palette, on the screens that show the most of it.
+                settings.account = AccountKind.Offline
+                for (palette in listOf(Palette.Green, Palette.Pink, Palette.Blue)) {
+                    settings.palette = palette
+                    for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {
+                        val suffix = "${palette.name.lowercase()}-${theme.name.lowercase()}"
+                        settings.theme = theme
+                        state.section = Section.Home
+                        delay(1500)
+                        shoot("palette-home-$suffix")
+                        state.section = Section.Settings
+                        delay(1000)
+                        shoot("palette-settings-$suffix")
+                    }
+                }
                 Preferences.userRoot().node("com/yumi/launcher-smoke").removeNode()
                 exitApplication()
             }
@@ -139,7 +155,7 @@ private fun launcher(args: Array<String>) = application {
             ThemeMode.Light -> false
             ThemeMode.Dark -> true
         }
-        LauncherTheme(dark) {
+        LauncherTheme(dark, settings.palette) {
             LauncherApp(windowState, settings, dark, onClose = ::exitApplication, closeRequests = closeRequests, onState = { smokeState = it })
         }
     }

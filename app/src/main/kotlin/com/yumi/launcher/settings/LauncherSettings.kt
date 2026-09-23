@@ -19,6 +19,9 @@ enum class ThemeMode(val label: String, val icon: ImageVector) {
     Dark("Тёмная", Icons.Rounded.DarkMode),
 }
 
+/** The colours: Yumi's own Glacier, or one of the pastel palettes. Stored by name. */
+enum class Palette(val label: String) { Original("Оригинал"), Green("Зелёная"), Pink("Розовая"), Blue("Синяя") }
+
 enum class AccountKind(val label: String) { Microsoft("Microsoft"), Offline("Офлайн"), ElyBy("Ely.by") }
 
 /**
@@ -40,6 +43,7 @@ enum class AfterLaunch(val label: String) { Keep("Оставить"), Minimize("
  */
 class LauncherSettings(private val store: Preferences = Preferences.userRoot().node("com/yumi/launcher")) {
     var theme by stored("theme", ThemeMode.System, { runCatching { ThemeMode.valueOf(it) }.getOrNull() }, { it.name })
+    var palette by stored("palette", Palette.Original, { runCatching { Palette.valueOf(it) }.getOrNull() }, { it.name })
     var account by stored("account", AccountKind.Offline, { runCatching { AccountKind.valueOf(it) }.getOrNull() }, { it.name })
     var nick by stored("nick", "", { it }, { it })
     var memoryMb by stored("memoryMb", defaultMemoryMb(), String::toIntOrNull, Int::toString)

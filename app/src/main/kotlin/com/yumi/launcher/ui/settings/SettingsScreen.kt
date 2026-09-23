@@ -1,5 +1,17 @@
 package com.yumi.launcher.ui.settings
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.selected
+import com.yumi.launcher.settings.Palette
+import com.yumi.launcher.ui.theme.colorScheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -67,6 +79,16 @@ fun SettingsScreen(model: LauncherModel) {
             Icon(mode.icon, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
         }
+        Label("Цвета")
+        PalettePicker(settings.palette) { settings.palette = it }
+        Hint(
+            when (settings.palette) {
+                Palette.Original -> "Ледяная Glacier — фирменные цвета Yumi."
+                Palette.Green -> "Пастельная мята с фисташковым и абрикосовым."
+                Palette.Pink -> "Пастельная сакура с сиреневым и мятным."
+                Palette.Blue -> "Пастельное небо с лавандовым и сливочным."
+            },
+        )
 
         Group("Остров на фоне")
         Label("Качество")
@@ -178,6 +200,45 @@ private fun GameFolder(model: LauncherModel) {
             color = scheme.error,
         )
         else -> Hint("При смене папки сборки и серверы с мирами переедут, а версии и Java скачаются заново.")
+    }
+}
+
+/**
+ * The palettes side by side, each as the swatch Material uses for a theme: a circle of its accent
+ * over its two quieter colours, drawn in whichever of light or dark is on now.
+ */
+@Composable
+private fun PalettePicker(selected: Palette, onSelect: (Palette) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.surface.luminance() < 0.5f
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Palette.entries.forEach { palette ->
+            val colors = colorScheme(palette, dark)
+            val picked = palette == selected
+            Surface(
+                onClick = { onSelect(palette) },
+                shape = RoundedCornerShape(22.dp),
+                color = if (picked) scheme.surfaceContainerHighest else scheme.surfaceContainer,
+                border = if (picked) BorderStroke(2.dp, scheme.primary) else null,
+                modifier = Modifier.weight(1f).semantics { role = Role.RadioButton; this.selected = picked },
+            ) {
+                Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.size(48.dp)) {
+                            drawArc(colors.primary, 180f, 180f, useCenter = true)
+                            drawArc(colors.tertiaryContainer, 90f, 90f, useCenter = true)
+                            drawArc(colors.secondaryContainer, 0f, 90f, useCenter = true)
+                        }
+                        if (picked) {
+                            Box(Modifier.size(22.dp).clip(CircleShape).background(colors.onPrimary), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = colors.primary)
+                            }
+                        }
+                    }
+                    Text(palette.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                }
+            }
+        }
     }
 }
 
