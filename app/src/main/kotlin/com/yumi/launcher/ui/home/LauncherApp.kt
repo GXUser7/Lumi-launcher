@@ -154,10 +154,12 @@ fun FrameWindowScope.LauncherApp(
         // left alone it stays Material's default black, which the dark theme cannot survive.
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             // The island holds still while the game runs: it would only be competing for the GPU.
+            // Each section has its place on the island, and the camera flies there when it opens.
             VoxelBackground(
                 parallax,
                 night = dark,
                 options = SceneOptions(settings.sceneQuality, settings.sceneMotion, settings.sceneFps),
+                spot = state.section.spot,
                 modifier = Modifier.fillMaxSize(),
                 running = !windowState.isMinimized && model.status !is PlayStatus.Running,
             )

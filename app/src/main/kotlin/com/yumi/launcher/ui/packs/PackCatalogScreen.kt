@@ -32,13 +32,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Key
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Star
@@ -354,7 +354,7 @@ private fun PackDetail(model: LauncherModel, source: ModSource, hit: PackHit, pr
                 }
                 if (hit.pageUrl.isNotBlank()) {
                     TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Icon(Icons.Rounded.OpenInNew, null, Modifier.size(16.dp))
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Страница сборки на ${source.label}")
                     }

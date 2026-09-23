@@ -5,21 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.material.icons.rounded.Computer
-import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.Gavel
-import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Sell
-import androidx.compose.material.icons.rounded.Update
-import androidx.compose.runtime.produceState
-import com.yumi.launcher.core.ModDetails
-import com.yumi.launcher.ui.components.InfoChip
-import com.yumi.launcher.ui.components.RemoteImage
-import com.yumi.launcher.ui.components.compactCount
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,18 +22,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Computer
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
@@ -68,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,16 +71,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.ModDetails
 import com.yumi.launcher.core.ModHit
 import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ModEntry
 import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.PackTile
-import com.yumi.launcher.ui.components.SearchField
 import com.yumi.launcher.ui.components.RemoteIcon
+import com.yumi.launcher.ui.components.RemoteImage
+import com.yumi.launcher.ui.components.SearchField
 import com.yumi.launcher.ui.components.choiceColors
+import com.yumi.launcher.ui.components.compactCount
 import com.yumi.launcher.ui.components.connectedShapes
 import java.awt.Desktop
 import java.net.URI
@@ -331,7 +331,7 @@ private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack:
                             }
                         }
                         TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }) {
-                            Icon(Icons.Rounded.OpenInNew, null, Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Страница")
                         }

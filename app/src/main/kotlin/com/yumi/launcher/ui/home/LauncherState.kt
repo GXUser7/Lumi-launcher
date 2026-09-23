@@ -14,14 +14,16 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.yumi.launcher.scene.SceneSpot
 
-enum class Section(val label: String, val icon: ImageVector) {
-    Home("Главная", Icons.Rounded.Home),
-    Mods("Моды", Icons.Rounded.Extension),
-    Packs("Сборки", Icons.Rounded.ViewInAr),
-    Servers("Серверы", Icons.Rounded.Dns),
-    Settings("Настройки", Icons.Rounded.Settings),
-    Console("Консоль", Icons.Rounded.Terminal);
+/** A part of the launcher, and the place on the island the camera shows while it is open. */
+enum class Section(val label: String, val icon: ImageVector, val spot: SceneSpot) {
+    Home("Главная", Icons.Rounded.Home, SceneSpot.Overview),
+    Mods("Моды", Icons.Rounded.Extension, SceneSpot.Forge),
+    Packs("Сборки", Icons.Rounded.ViewInAr, SceneSpot.Library),
+    Servers("Серверы", Icons.Rounded.Dns, SceneSpot.Portal),
+    Settings("Настройки", Icons.Rounded.Settings, SceneSpot.Campfire),
+    Console("Консоль", Icons.Rounded.Terminal, SceneSpot.Overview);
 
     companion object {
         /** What the top bar lists; Settings and the console live behind their own buttons. */

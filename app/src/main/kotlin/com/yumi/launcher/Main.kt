@@ -25,6 +25,8 @@ import com.yumi.launcher.data.ServerStatus
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.settings.Palette
+import com.yumi.launcher.settings.SceneMotion
+import com.yumi.launcher.settings.SceneQuality
 import com.yumi.launcher.settings.ThemeMode
 import com.yumi.launcher.ui.home.LauncherApp
 import com.yumi.launcher.ui.home.LauncherState
@@ -120,11 +122,12 @@ private fun launcher(args: Array<String>) = application {
                 window.isAlwaysOnTop = true
                 window.toFront()
                 val output = File(".local/screenshots").also(File::mkdirs)
-                // `--only=server` photographs just the shots whose names contain "server" — quicker while working on one screen.
-                val only = args.firstOrNull { it.startsWith("--only=") }?.removePrefix("--only=")
+                // `--only=server` photographs just the shots whose names contain "server" — quicker while
+                // working on one screen; `--only=home-,scene-` takes several.
+                val only = args.firstOrNull { it.startsWith("--only=") }?.removePrefix("--only=")?.split(',')
                 val state = smokeState!!
                 suspend fun shot(name: String, wait: Long, setup: () -> Unit) {
-                    if (only != null && only !in name) return
+                    if (only != null && only.none { it in name }) return
                     setup()
                     delay(wait)
                     val area = Rectangle(window.contentPane.locationOnScreen, window.contentPane.size)
@@ -135,12 +138,12 @@ private fun launcher(args: Array<String>) = application {
                     settings.theme = theme
                     settings.account = AccountKind.Offline
                     shot("home-$suffix", 4000) { state.section = Section.Home }
-                    shot("packs-$suffix", 2500) { state.section = Section.Packs }
+                    shot("packs-$suffix", 3000) { state.section = Section.Packs }
                     shot("pack-import-$suffix", 3000) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
                     shot("pack-editor-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Edit("smoke-fabric") }
                     shot("mods-$suffix", 5000) { state.section = Section.Mods }
-                    shot("settings-$suffix", 1200) { state.section = Section.Settings }
-                    shot("servers-$suffix", 1200) {
+                    shot("settings-$suffix", 3000) { state.section = Section.Settings }
+                    shot("servers-$suffix", 3000) {
                         state.section = Section.Servers
                         state.serversTab = ServersTab.Hosted
                         state.serverView = ServerView.List
@@ -193,8 +196,21 @@ private fun launcher(args: Array<String>) = application {
                     state.serversTab = ServersTab.Hosted
                     state.serverView = ServerView.List
                 }
-                // Each pastel palette, on the screens that show the most of it.
+                // The backdrop at each quality level from one viewpoint — the orbit stands still while
+                // the pointer alone moves the camera — then half-way through a flight to the smithy.
                 settings.account = AccountKind.Offline
+                settings.sceneMotion = SceneMotion.Mouse
+                for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {
+                    settings.theme = theme
+                    for (quality in SceneQuality.entries) {
+                        settings.sceneQuality = quality
+                        shot("scene-${quality.name.lowercase()}-${theme.name.lowercase()}", 1500) { state.section = Section.Home }
+                    }
+                }
+                settings.sceneQuality = SceneQuality.Ultra
+                settings.sceneMotion = SceneMotion.Both
+                shot("scene-flight", 950) { state.section = Section.Mods }
+                // Each pastel palette, on the screens that show the most of it.
                 for (palette in listOf(Palette.Green, Palette.Pink, Palette.Blue)) {
                     settings.palette = palette
                     for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {

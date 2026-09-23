@@ -93,9 +93,10 @@ fun SettingsScreen(model: LauncherModel) {
         Choice(SceneQuality.entries, settings.sceneQuality, { it.label }, { settings.sceneQuality = it })
         Hint(
             when (settings.sceneQuality) {
-                SceneQuality.Low -> "Плоское освещение — для слабых компьютеров."
-                SceneQuality.High -> "Мягкий свет в углах, как в Minecraft, и тени от солнца или луны."
-                SceneQuality.Ultra -> "Всё из «Высокого», плюс лучи света, дымка у горизонта и живая вода."
+                SceneQuality.Low -> "Блоки без текстур и простой свет — для слабых компьютеров."
+                SceneQuality.Medium -> "Текстуры, мягкий свет в углах, свет от факелов и фонарей, текущая вода и лава."
+                SceneQuality.High -> "Плюс тени от солнца и луны, ореолы у огней, дым, искры, светлячки и далёкие острова."
+                SceneQuality.Ultra -> "Всё сразу: лучи света, северное сияние, падающие звёзды, листва на ветру, блики на воде, тени облаков, птицы."
             },
         )
         Label("Кадров в секунду")
