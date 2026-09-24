@@ -49,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Friend
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
+import com.yumi.launcher.data.PackCheck
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.SkinHead
@@ -77,8 +79,17 @@ import com.yumi.launcher.ui.theme.glass
  * one — nothing is sent anywhere until then. Folds down to its header, like the news.
  */
 @Composable
-internal fun FriendsCard(model: LauncherModel, hidden: Boolean, onHiddenChange: (Boolean) -> Unit, onJoin: (Instance?, String) -> Unit, modifier: Modifier = Modifier) {
+internal fun FriendsCard(
+    model: LauncherModel,
+    hidden: Boolean,
+    onHiddenChange: (Boolean) -> Unit,
+    onJoin: (Instance?, String) -> Unit,
+    onServerPack: (ServerPackTarget) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val friends = model.friends
+    // Back on the home screen: the hosts may have changed their mods, the player their packs.
+    LaunchedEffect(Unit) { friends.servers.refresh() }
     Column(modifier.width(CARD), horizontalAlignment = Alignment.End) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(shape = CircleShape, color = Color.Transparent, modifier = Modifier.glass(CircleShape)) {
@@ -119,7 +130,7 @@ internal fun FriendsCard(model: LauncherModel, hidden: Boolean, onHiddenChange: 
                         Hint("Его адрес — в «Настройках», раздел «Друзья».")
                     }
                     !friends.signedIn -> SignUp(model)
-                    else -> FriendsList(model, onJoin)
+                    else -> FriendsList(model, onJoin, onServerPack)
                 }
             }
         }
@@ -156,7 +167,7 @@ private fun SignUp(model: LauncherModel) {
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.FriendsList(model: LauncherModel, onJoin: (Instance?, String) -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.FriendsList(model: LauncherModel, onJoin: (Instance?, String) -> Unit, onServerPack: (ServerPackTarget) -> Unit) {
     val friends = model.friends
     val scheme = MaterialTheme.colorScheme
     val view = friends.view
@@ -229,7 +240,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.FriendsList(model: La
     }
     if (view.friends.isNotEmpty()) {
         LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(view.friends, key = { it.name }) { friend -> FriendRow(model, friend, onJoin) }
+            items(view.friends, key = { it.name }) { friend -> FriendRow(model, friend, onJoin, onServerPack) }
         }
     }
     for (name in view.outgoing) {
@@ -248,7 +259,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.FriendsList(model: La
 }
 
 @Composable
-private fun FriendRow(model: LauncherModel, friend: Friend, onJoin: (Instance?, String) -> Unit) {
+private fun FriendRow(model: LauncherModel, friend: Friend, onJoin: (Instance?, String) -> Unit, onServerPack: (ServerPackTarget) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val server = friend.server
     var menu by remember { mutableStateOf(false) }
@@ -272,7 +283,7 @@ private fun FriendRow(model: LauncherModel, friend: Friend, onJoin: (Instance?, 
         if (server != null) {
             Tip("Зайти к другу на $server") {
                 FilledTonalIconButton(
-                    onClick = { onJoin(packFor(model, friend), server) },
+                    onClick = { join(model, friend, server, onJoin, onServerPack) },
                     enabled = !model.busy,
                     shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.size(36.dp),
@@ -289,6 +300,18 @@ private fun FriendRow(model: LauncherModel, friend: Friend, onJoin: (Instance?, 
                 )
             }
         }
+    }
+}
+
+/**
+ * "Зайти к другу": straight in, unless the friend is on a server run from Yumi Launcher whose pack
+ * no pack here has — or that is still being checked. Then the choice comes first: download the
+ * host's pack as a pack of its own, or go in as things are.
+ */
+private fun join(model: LauncherModel, friend: Friend, server: String, onJoin: (Instance?, String) -> Unit, onServerPack: (ServerPackTarget) -> Unit) {
+    when (model.friends.servers.checks[server]) {
+        null, is PackCheck.Ready -> onJoin(packFor(model, friend), server)
+        else -> onServerPack(ServerPackTarget.Friend(friend.name, server, friend.pack?.name ?: "Сервер ${friend.name}", packFor(model, friend)?.id))
     }
 }
 
@@ -315,8 +338,13 @@ private fun ago(seen: Long): String {
     }
 }
 
-/** The pack to join a friend with: one like theirs — same name and version, or the same game — or the chosen one. */
+/**
+ * The pack to join a friend with: the one that has their Yumi server's pack, then one like theirs —
+ * same name and version, or the same game — or the chosen one.
+ */
 private fun packFor(model: LauncherModel, friend: Friend): Instance? {
+    val checked = friend.server?.let { model.friends.servers.checks[it] } as? PackCheck.Ready
+    checked?.let { model.instances[it.packId] }?.let { return it }
     val pack = friend.pack
     val all = model.instances.all
     return all.firstOrNull { pack != null && it.name == pack.name && it.version == pack.version }

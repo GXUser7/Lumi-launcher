@@ -21,6 +21,7 @@ import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.PackArchives
 import com.yumi.launcher.core.ServerMods
 import com.yumi.launcher.data.LauncherModel
+import com.yumi.launcher.data.PackCheck
 import com.yumi.launcher.data.ServerStatus
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.LauncherSettings
@@ -32,6 +33,7 @@ import com.yumi.launcher.ui.home.LauncherApp
 import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.home.PackRequest
 import com.yumi.launcher.ui.home.Section
+import com.yumi.launcher.ui.home.ServerPackTarget
 import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
@@ -189,6 +191,15 @@ private fun launcher(args: Array<String>) = application {
                     shot("home-$suffix", 4000) { state.section = Section.Home }
                     shot("news-hidden-$suffix", 1200) { settings.newsHidden = true }
                     settings.newsHidden = false
+                    // With friends from a friends server (YUMI_SMOKE_FRIENDS): "Зайти к другу" to a Yumi server without its pack.
+                    // Only while there is none here — with one, the dialog would go straight into the game.
+                    val friends = smokeModel?.friends
+                    friends?.view?.friends?.firstOrNull { it.online && it.server != null && friends.servers.checks[it.server] is PackCheck.Missing }?.let { friend ->
+                        shot("friend-pack-$suffix", 5000) {
+                            state.serverPack = ServerPackTarget.Friend(friend.name, friend.server!!, friend.pack?.name ?: "Сервер ${friend.name}", smokeModel?.selected?.id)
+                        }
+                        state.serverPack = null
+                    }
                     shot("packs-$suffix", 3000) { state.section = Section.Packs }
                     shot("pack-import-$suffix", 3000) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
                     shot("pack-editor-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Edit("smoke-fabric") }
@@ -246,7 +257,7 @@ private fun launcher(args: Array<String>) = application {
                     shot("quick-join-pack-$suffix", 5000) {
                         state.section = Section.Servers
                         state.serversTab = ServersTab.QuickJoin
-                        state.serverPack = "friend"
+                        state.serverPack = ServerPackTarget.Saved("friend")
                     }
                     // "Создать сборку", once: the pack downloads, the dialog closes, Dima's server gets it.
                     if (theme == ThemeMode.Light) shot("quick-join-packed-$suffix", 12000) { click(800, 484) }

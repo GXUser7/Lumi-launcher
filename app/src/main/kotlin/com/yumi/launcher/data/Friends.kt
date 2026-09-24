@@ -42,6 +42,9 @@ class FriendsModel(private val model: LauncherModel, private val scope: Coroutin
 
     private val nudge = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /** The servers friends are on, and whether a pack here fits the one a Yumi server shares. */
+    internal val servers = FriendServers(model, scope)
+
     val url: String get() = settings.friendsServer.trim().ifEmpty { FriendsApi.DEFAULT_URL }.trimEnd('/')
     val available: Boolean get() = url.isNotEmpty()
     val signedIn: Boolean get() = settings.friendsToken.isNotEmpty()
@@ -58,6 +61,10 @@ class FriendsModel(private val model: LauncherModel, private val scope: Coroutin
         scope.launch {
             snapshotFlow { listOf(model.status is PlayStatus.Running, model.gameServer, settings.friendsShare, settings.friendsToken, url) }
                 .collect { nudge.tryEmit(Unit) }
+        }
+        scope.launch {
+            snapshotFlow { view?.friends.orEmpty().filter { it.online }.mapNotNull { it.server }.toSet() }
+                .collect(servers::follow)
         }
         Runtime.getRuntime().addShutdownHook(Thread {
             if (available && signedIn) FriendsApi(url, settings.friendsToken).offlineNow()
