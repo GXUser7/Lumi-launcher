@@ -55,6 +55,7 @@ import com.yumi.launcher.settings.ThemeMode
 import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Label
+import com.yumi.launcher.ui.components.LocalFieldContainer
 import com.yumi.launcher.ui.components.freeSpace
 import com.yumi.launcher.ui.components.hasNonAscii
 import com.yumi.launcher.ui.components.pickFolder
@@ -148,6 +149,16 @@ fun SettingsScreen(model: LauncherModel) {
         )
         Hint("Бесплатный личный ключ: console.curseforge.com → API Keys. Modrinth работает без ключа.")
 
+        Label("Настройки Minecraft")
+        Choice(listOf(true, false), settings.syncOptions, { if (it) "Общие для сборок" else "У каждой свои" }, { settings.syncOptions = it })
+        Hint(
+            if (settings.syncOptions) {
+                "Клавиши, мышь, звук, графика и язык переходят из сборки в сборку. Наборы ресурсов и окно у каждой свои."
+            } else {
+                "Каждая сборка помнит свои настройки игры."
+            },
+        )
+
         Label("Когда игра запустилась")
         Choice(AfterLaunch.entries, settings.afterLaunch, { it.label }, { settings.afterLaunch = it })
         Hint(
@@ -202,12 +213,11 @@ private fun GameFolder(model: LauncherModel) {
 
 /**
  * The palettes side by side, each as the swatch Material uses for a theme: a circle of its accent
- * over its two quieter colours, drawn in whichever of light or dark is on now.
+ * over its two quieter colours, drawn in [dark] or light — by default whichever is on now.
  */
 @Composable
-private fun PalettePicker(selected: Palette, onSelect: (Palette) -> Unit) {
+internal fun PalettePicker(selected: Palette, dark: Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f, onSelect: (Palette) -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val dark = scheme.surface.luminance() < 0.5f
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Palette.entries.forEach { palette ->
             val colors = colorScheme(palette, dark)
@@ -215,7 +225,7 @@ private fun PalettePicker(selected: Palette, onSelect: (Palette) -> Unit) {
             Surface(
                 onClick = { onSelect(palette) },
                 shape = RoundedCornerShape(22.dp),
-                color = if (picked) scheme.surfaceContainerHighest else scheme.surfaceContainer,
+                color = if (picked) scheme.surfaceContainerHighest else LocalFieldContainer.current ?: scheme.surfaceContainer,
                 border = if (picked) BorderStroke(2.dp, scheme.primary) else null,
                 modifier = Modifier.weight(1f).semantics { role = Role.RadioButton; this.selected = picked },
             ) {

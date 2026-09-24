@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
@@ -89,6 +90,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,6 +101,10 @@ import com.yumi.launcher.core.Loaders
 import com.yumi.launcher.core.VersionEntry
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
+import com.yumi.launcher.data.MenuStyle
+import com.yumi.launcher.data.MenuStyles
+import com.yumi.launcher.settings.ThemeMode
+import com.yumi.launcher.ui.settings.PalettePicker
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.Field
@@ -148,6 +154,8 @@ private class Draft(
     width: Int?,
     height: Int?,
     fullscreen: Boolean,
+    menu: MenuStyle?,
+    syncOptions: Boolean,
 ) {
     var name by mutableStateOf(name)
     var version by mutableStateOf(version)
@@ -164,14 +172,19 @@ private class Draft(
     var height by mutableStateOf(height?.toString() ?: "")
     var fullscreen by mutableStateOf(fullscreen)
 
+    /** Null: the game's own menus. */
+    var menu by mutableStateOf(menu)
+    var syncOptions by mutableStateOf(syncOptions)
+
     val valid get() = name.isNotBlank() && version.isNotBlank()
 
     companion object {
         fun of(instance: Instance) = Draft(
             instance.id, instance.name, instance.version, instance.loader, instance.loaderVersion, instance.icon, instance.iconUrl,
-            instance.memoryMb, instance.jvmArgs, instance.width, instance.height, instance.fullscreen,
+            instance.memoryMb, instance.jvmArgs, instance.width, instance.height, instance.fullscreen, instance.menuStyle,
+            instance.syncOptions,
         )
-        fun new(latest: String?, icon: Int) = Draft(null, "", latest ?: "", Loader.Vanilla, null, icon, null, null, "", null, null, false)
+        fun new(latest: String?, icon: Int) = Draft(null, "", latest ?: "", Loader.Vanilla, null, icon, null, null, "", null, null, false, null, true)
     }
 }
 
@@ -471,6 +484,18 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
                     icon = Icons.Rounded.Code,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                val shared = model.settings.syncOptions
+                ToggleRow(
+                    "Общие настройки игры",
+                    draft.syncOptions && shared,
+                    { draft.syncOptions = it },
+                    enabled = shared,
+                    description = when {
+                        !shared -> "Выключены в настройках лаунчера — у каждой сборки свои"
+                        draft.syncOptions -> "Клавиши, звук и графика — как в остальных сборках"
+                        else -> "У этой сборки свои клавиши, звук и графика"
+                    },
+                )
             }
             FormSection("Окно игры", Icons.Rounded.AspectRatio) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -479,6 +504,7 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
                 }
                 ToggleRow("Полный экран", draft.fullscreen, { draft.fullscreen = it }, description = "Игра откроется на весь экран")
             }
+            MenuSection(model, draft)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
@@ -519,6 +545,40 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
                 }
             }
         }
+    }
+}
+
+/**
+ * The game's menus in the launcher's look: its palettes, light or dark, and — separately, since the
+ * game has one font for everything — its typeface. Starts from the launcher's own look.
+ */
+@Composable
+private fun MenuSection(model: LauncherModel, draft: Draft) {
+    val launcherDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val supported = MenuStyles.supports(model.manifest?.versions?.firstOrNull { it.id == draft.version })
+    FormSection("Меню игры", Icons.Rounded.Palette, subtitle = "Главное меню и настройки Minecraft") {
+        ToggleRow(
+            "Оформление Yumi",
+            draft.menu != null && supported,
+            { on -> draft.menu = if (on) MenuStyle(model.settings.palette, launcherDark) else null },
+            description = if (supported) "Кнопки, ползунки, фоны и своя панорама — набор ресурсов, Sodium ему не мешает" else "Нужна версия 1.20.2 или новее",
+            enabled = supported,
+        )
+        val menu = draft.menu?.takeIf { supported } ?: return@FormSection
+        Label("Цвета")
+        PalettePicker(menu.palette, dark = menu.dark) { draft.menu = menu.copy(palette = it) }
+        Label("Тема")
+        val theme = if (menu.dark) ThemeMode.Dark else ThemeMode.Light
+        ChoiceGroup(listOf(ThemeMode.Light, ThemeMode.Dark), theme, { it.label }, { draft.menu = menu.copy(dark = it == ThemeMode.Dark) }, height = 44.dp) { mode ->
+            Icon(mode.icon, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        ToggleRow(
+            "Шрифт лаунчера",
+            menu.font,
+            { draft.menu = menu.copy(font = it) },
+            description = "Roboto Flex вместо пиксельного — во всей игре, в чате и на табличках тоже",
+        )
     }
 }
 
@@ -594,6 +654,8 @@ private fun save(model: LauncherModel, draft: Draft, existing: Instance?): Insta
         width = if (width != null && height != null) width else null,
         height = if (width != null && height != null) height else null,
         fullscreen = draft.fullscreen,
+        menuStyle = draft.menu,
+        syncOptions = draft.syncOptions,
     )
     model.instances.save(updated)
     return updated

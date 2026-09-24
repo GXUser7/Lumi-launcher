@@ -59,6 +59,9 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
     var afterLaunch by stored("afterLaunch", AfterLaunch.Minimize, { runCatching { AfterLaunch.valueOf(it) }.getOrNull() }, { it.name })
     var selectedInstance by stored("selectedInstance", "", { it }, { it })
 
+    /** Minecraft's own settings — keys, sound, video, language — the same in every pack; see `GameOptions`. */
+    var syncOptions by stored("syncOptions", true, { it == "true" }, { it.toString() })
+
     var sceneQuality by stored("sceneQuality", SceneQuality.Ultra, { runCatching { SceneQuality.valueOf(it) }.getOrNull() }, { it.name })
     var sceneMotion by stored("sceneMotion", SceneMotion.Both, { runCatching { SceneMotion.valueOf(it) }.getOrNull() }, { it.name })
     var sceneFps by stored("sceneFps", 60, String::toIntOrNull, Int::toString)

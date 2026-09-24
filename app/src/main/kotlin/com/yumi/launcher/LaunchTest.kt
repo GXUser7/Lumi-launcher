@@ -13,21 +13,29 @@ import com.yumi.launcher.core.Loaders
 import com.yumi.launcher.core.Modrinth
 import com.yumi.launcher.core.Stage
 import com.yumi.launcher.core.loadManifest
+import com.yumi.launcher.data.MenuStyle
+import com.yumi.launcher.data.MenuStyles
+import com.yumi.launcher.settings.Palette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.File
 
 /**
- * `--launch-test <version> <folder> [loader] [modrinth-project…] [--join=host:port] [--injector]`:
+ * `--launch-test <version> <folder> [loader] [modrinth-project…] [--join=host:port] [--injector] [--menu=pink-dark-font]`:
  * the whole download-and-start path without the window, into a throwaway folder. With a loader it
  * installs that too, and any Modrinth projects named after it. Waits for the game to build its
  * texture atlas — proof it got as far as rendering with its mods loaded — then closes it; with
  * `--join`, waits for it to connect to that server instead. `--injector` starts it under
- * authlib-injector pointed at Ely.by, as an Ely.by account would. Exits 0 on success.
+ * authlib-injector pointed at Ely.by, as an Ely.by account would. `--menu` dresses the game's menus
+ * as a pack's "Меню игры" setting does: a palette, `light` or `dark`, and `font` for the typeface.
+ * Exits 0 on success.
  */
 internal fun launchTest(all: List<String>): Int = runBlocking {
     val join = all.firstOrNull { it.startsWith("--join=") }?.removePrefix("--join=")
     val withInjector = "--injector" in all
+    val menu = all.firstOrNull { it.startsWith("--menu=") }?.removePrefix("--menu=")?.split('-')?.let { parts ->
+        MenuStyle(Palette.entries.first { it.name.equals(parts[0], true) }, dark = "dark" in parts, font = "font" in parts)
+    }
     val args = all.filterNot { it.startsWith("--") }
     val version = args[0]
     val root = File(args[1]).absoluteFile
@@ -56,6 +64,10 @@ internal fun launchTest(all: List<String>): Int = runBlocking {
         println("Мод: ${file.fileName}; зависимости: ${file.requires}")
     }
     val prepared = installer.prepare(launchId, lookup, gameDir, null)
+    if (menu != null) {
+        MenuStyles.apply(gameDir, menu, LauncherPaths.versions.resolve(prepared.profile.jar).resolve("${prepared.profile.jar}.jar"))
+        println("Меню игры: $menu; " + gameDir.resolve("options.txt").readLines().first { it.startsWith("resourcePacks:") })
+    }
     println("Готово за ${(System.currentTimeMillis() - started) / 1000} с; Java: ${prepared.java}")
 
     // A fresh game folder opens on the accessibility screen, and Quick Play waits behind it for a click.
@@ -90,6 +102,7 @@ internal fun launchTest(all: List<String>): Int = runBlocking {
         println("--- про моды ---")
         lines.filter { "mods" in it.lowercase() && ("Loading" in it || "Found" in it) }.take(5).forEach(::println)
         lines.filter { "authlib-injector" in it || "Connecting to" in it }.take(5).forEach(::println)
+        if (menu != null) println("Набор ресурсов " + if (lines.any { "Reloading ResourceManager" in it && "file/Yumi.zip" in it }) "загружен" else "НЕ загружен")
         println("--- лог (хвост) ---")
         lines.takeLast(12).forEach(::println)
     }

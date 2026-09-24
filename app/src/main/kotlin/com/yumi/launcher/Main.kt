@@ -36,14 +36,18 @@ import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
 import com.yumi.launcher.ui.theme.LauncherTheme
+import com.yumi.launcher.ui.theme.MenuPack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.awt.Dimension
 import java.awt.Rectangle
 import java.awt.Robot
+import java.awt.event.MouseEvent
+import java.awt.event.MouseWheelEvent
 import java.io.File
 import java.util.prefs.Preferences
 import javax.imageio.ImageIO
+import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import kotlin.system.exitProcess
 
@@ -53,10 +57,25 @@ fun main(args: Array<String>) {
         "--server-test" -> exitProcess(serverTest(args.drop(1)))
         "--ping-test" -> exitProcess(pingTest(args.drop(1)))
         "--pack-test" -> exitProcess(packTest(args.drop(1)))
+        "--menu-packs" -> exitProcess(menuPacks(args.drop(1)))
+        "--options-test" -> exitProcess(optionsTest(args.drop(1)))
     }
     // Native-looking Swing dialogs: the folder chooser is Swing's, and its default look is from 2006.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     launcher(args)
+}
+
+/** `--menu-packs <folder>`: every palette and theme of the game-menu pack, as zips to drop into any game's resource packs. */
+private fun menuPacks(args: List<String>): Int {
+    val folder = File(args.firstOrNull() ?: return 2.also { println("Использование: --menu-packs <папка>") }).apply { mkdirs() }
+    for (palette in Palette.entries) for (dark in listOf(false, true)) {
+        val started = System.currentTimeMillis()
+        val file = folder.resolve(MenuPack.title(palette, dark) + ".zip")
+        file.writeBytes(MenuPack.build(palette, dark))
+        println("${file.name}: ${file.length() / 1024} КБ за ${System.currentTimeMillis() - started} мс")
+    }
+    folder.resolve(MenuPack.FONT_TITLE + ".zip").writeBytes(MenuPack.buildFont())
+    return 0
 }
 
 private fun packTest(args: List<String>): Int = runBlocking {
@@ -90,7 +109,7 @@ private fun launcher(args: Array<String>) = application {
                 LauncherPaths.config = File(".local/smoke-config").absoluteFile
                 // A Fabric pack, so the mods screen has a catalogue to show.
                 File(it.gameDir, "instances/smoke-fabric").apply { mkdirs() }.resolve("instance.json")
-                    .writeText("""{"id":"smoke-fabric","name":"Fabric 1.21.1","version":"1.21.1","loader":"Fabric"}""")
+                    .writeText("""{"id":"smoke-fabric","name":"Fabric 1.21.1","version":"1.21.1","loader":"Fabric","menuStyle":{"palette":"Pink","dark":false,"font":true}}""")
                 it.selectedInstance = "smoke-fabric"
                 // A server made from it, and two servers to join: one that answers and one that does not.
                 File(it.gameDir, "servers/smoke-server").apply { mkdirs() }.apply {
@@ -133,6 +152,14 @@ private fun launcher(args: Array<String>) = application {
                     val area = Rectangle(window.contentPane.locationOnScreen, window.contentPane.size)
                     ImageIO.write(Robot().createScreenCapture(area), "png", File(output, "$name.png"))
                 }
+                // Turns the wheel over the window at x, y without moving the real pointer.
+                fun wheel(x: Int, y: Int, clicks: Int) {
+                    val target = SwingUtilities.getDeepestComponentAt(window.contentPane, x, y) ?: return
+                    val at = SwingUtilities.convertPoint(window.contentPane, x, y, target)
+                    target.dispatchEvent(
+                        MouseWheelEvent(target, MouseEvent.MOUSE_WHEEL, System.currentTimeMillis(), 0, at.x, at.y, 0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 3, clicks),
+                    )
+                }
                 for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {
                     val suffix = theme.name.lowercase()
                     settings.theme = theme
@@ -143,8 +170,13 @@ private fun launcher(args: Array<String>) = application {
                     shot("packs-$suffix", 3000) { state.section = Section.Packs }
                     shot("pack-import-$suffix", 3000) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
                     shot("pack-editor-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Edit("smoke-fabric") }
+                    // Further down: how the pack starts, and last its game's menus.
+                    shot("pack-editor-launch-$suffix", 1200) { wheel(270, 500, 9) }
+                    shot("pack-editor-menu-$suffix", 1200) { wheel(270, 500, 40) }
                     shot("mods-$suffix", 5000) { state.section = Section.Mods }
                     shot("settings-$suffix", 3000) { state.section = Section.Settings }
+                    // The game group — memory, Java, shared game settings — is at the bottom.
+                    shot("settings-game-$suffix", 1200) { wheel(270, 500, 80) }
                     shot("servers-$suffix", 3000) {
                         state.section = Section.Servers
                         state.serversTab = ServersTab.Hosted

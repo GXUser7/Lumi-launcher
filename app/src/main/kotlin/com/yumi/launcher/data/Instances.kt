@@ -30,6 +30,10 @@ data class Instance(
     val created: Long = System.currentTimeMillis(),
     val lastPlayed: Long? = null,
     val playSeconds: Long = 0,
+    /** The game's menus in the launcher's look; null leaves them as the game and its packs draw them. */
+    val menuStyle: MenuStyle? = null,
+    /** Off: the pack keeps its own game settings instead of the shared ones, see [GameOptions]. */
+    val syncOptions: Boolean = true,
 )
 
 /** Packs on disk: `instances/<id>/instance.json` beside the pack's `minecraft` game folder. */

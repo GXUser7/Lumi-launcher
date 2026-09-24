@@ -155,6 +155,13 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
                 val installer = Installer { stage, fraction -> status = PlayStatus.Preparing(stage, fraction) }
                 val launchId = if (instance.loader == Loader.Vanilla) instance.version else loader(instance, installer, lookup, gameDir, java)
                 val prepared = installer.prepare(launchId, lookup, gameDir, java)
+                val clientJar = LauncherPaths.versions.resolve(prepared.profile.jar).resolve("${prepared.profile.jar}.jar")
+                // Only looks: a pack that cannot be written must not keep the game from starting.
+                withContext(Dispatchers.IO) { runCatching { MenuStyles.apply(gameDir, instance.menuStyle, clientJar) } }
+                val eraOf = { pack: Instance -> GameOptions.era(lookup(pack.version)) }
+                withContext(Dispatchers.IO) {
+                    runCatching { GameOptions.beforeStart(instances, instance, settings.syncOptions && instance.syncOptions, eraOf) }
+                }
                 val account = account()
                 status = PlayStatus.Preparing(Stage.Starting, 1f)
                 val options = LaunchOptions(
@@ -180,6 +187,8 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
                 val code = withContext(Dispatchers.IO) { game.waitFor() }
                 tail.join()
                 process = null
+                // The player's changes reach the other packs now, not only at the next start.
+                withContext(Dispatchers.IO) { runCatching { GameOptions.settle(instances) } }
                 val seconds = (System.currentTimeMillis() - started) / 1000
                 instances[instance.id]?.let { instances.save(it.copy(playSeconds = it.playSeconds + seconds)) }
                 status = if (code == 0 || stopping) PlayStatus.Idle else PlayStatus.Failed("Игра завершилась с кодом $code — подробности в консоли")

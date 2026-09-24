@@ -138,7 +138,7 @@ private fun pastel(h: Hues, dark: Boolean): ColorScheme {
  * OKLCH → sRGB. Lightness 0–1, chroma about 0–0.3, hue in degrees. A colour outside sRGB loses
  * chroma until it fits, rather than being clipped channel by channel — clipping shifts the hue.
  */
-private fun oklch(l: Float, c: Float, hue: Float): Color {
+internal fun oklch(l: Float, c: Float, hue: Float): Color {
     var chroma = c
     while (true) {
         val rgb = toLinearSrgb(l, chroma, hue)
@@ -150,7 +150,7 @@ private fun oklch(l: Float, c: Float, hue: Float): Color {
     }
 }
 
-private fun toLinearSrgb(l: Float, c: Float, hue: Float): List<Float> {
+internal fun toLinearSrgb(l: Float, c: Float, hue: Float): List<Float> {
     val h = Math.toRadians(hue.toDouble())
     val a = c * cos(h).toFloat()
     val b = c * sin(h).toFloat()
@@ -165,4 +165,4 @@ private fun toLinearSrgb(l: Float, c: Float, hue: Float): List<Float> {
 }
 
 /** Linear light → the sRGB transfer curve. */
-private fun encode(x: Float): Float = if (x <= 0.0031308f) 12.92f * x else 1.055f * x.pow(1f / 2.4f) - 0.055f
+internal fun encode(x: Float): Float = if (x <= 0.0031308f) 12.92f * x else 1.055f * x.pow(1f / 2.4f) - 0.055f
