@@ -59,6 +59,7 @@ fun main(args: Array<String>) {
         "--pack-test" -> exitProcess(packTest(args.drop(1)))
         "--menu-packs" -> exitProcess(menuPacks(args.drop(1)))
         "--options-test" -> exitProcess(optionsTest(args.drop(1)))
+        "--friends-test" -> exitProcess(friendsTest(args.drop(1)))
     }
     // Native-looking Swing dialogs: the folder chooser is Swing's, and its default look is from 2006.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
@@ -111,6 +112,14 @@ private fun launcher(args: Array<String>) = application {
                 File(it.gameDir, "instances/smoke-fabric").apply { mkdirs() }.resolve("instance.json")
                     .writeText("""{"id":"smoke-fabric","name":"Fabric 1.21.1","version":"1.21.1","loader":"Fabric","menuStyle":{"palette":"Pink","dark":false,"font":true}}""")
                 it.selectedInstance = "smoke-fabric"
+                // Friends from a running friends server, when the run is given one: "address|name|token".
+                it.friendsServer = ""
+                it.friendsToken = ""
+                System.getenv("YUMI_SMOKE_FRIENDS")?.split('|')?.takeIf { spec -> spec.size == 3 }?.let { (url, name, token) ->
+                    it.friendsServer = url
+                    it.friendsName = name
+                    it.friendsToken = token
+                }
                 // A server made from it, and two servers to join: one that answers and one that does not.
                 File(it.gameDir, "servers/smoke-server").apply { mkdirs() }.apply {
                     resolve("yumi-server.json").writeText(

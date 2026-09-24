@@ -61,12 +61,21 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val quickJoin = QuickJoinList(scope)
     val ely = ElyAccount(settings, scope)
     val packImports = PackImporter(this, scope)
+    val friends = FriendsModel(this, scope)
 
     var manifest by mutableStateOf<VersionManifest?>(null)
         private set
     var manifestError by mutableStateOf<String?>(null)
         private set
     var status by mutableStateOf<PlayStatus>(PlayStatus.Idle)
+        private set
+
+    /**
+     * The server the running game is on, as `host[:port]`: the one it was started into, then
+     * whichever the log says it connects to. Null in the menus' first minutes, in a world of its
+     * own, and once the game is closed.
+     */
+    var gameServer by mutableStateOf<String?>(null)
         private set
 
     /** The running game's output, newest last, capped so a chatty mod cannot eat the heap. */
@@ -149,6 +158,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
         stopping = false
         job = scope.launch {
             log.clear()
+            gameServer = join
             status = PlayStatus.Preparing(Stage.Game, 0f)
             try {
                 val gameDir = instances.gameDir(instance)
@@ -187,6 +197,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
                 val code = withContext(Dispatchers.IO) { game.waitFor() }
                 tail.join()
                 process = null
+                gameServer = null
                 // The player's changes reach the other packs now, not only at the next start.
                 withContext(Dispatchers.IO) { runCatching { GameOptions.settle(instances) } }
                 val seconds = (System.currentTimeMillis() - started) / 1000
@@ -339,11 +350,18 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     }
 
     private fun append(lines: List<String>) {
+        for (line in lines) {
+            CONNECTING.find(line)?.let { m -> gameServer = m.groupValues[1] + if (m.groupValues[2] == "25565") "" else ":" + m.groupValues[2] }
+            if ("Starting integrated minecraft server" in line) gameServer = null
+        }
         log.addAll(lines)
         if (log.size > MAX_LOG) log.removeRange(0, log.size - MAX_LOG)
     }
 
     private companion object {
         const val MAX_LOG = 4000
+
+        /** What the game logs as it joins a server, from the multiplayer screen or a direct connect. */
+        val CONNECTING = Regex("""Connecting to ([^\s,]+), (\d+)""")
     }
 }

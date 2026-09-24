@@ -37,6 +37,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.yumi.launcher.core.FriendsApi
+import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -168,6 +174,34 @@ fun SettingsScreen(model: LauncherModel) {
                 AfterLaunch.Close -> "Лаунчер закроется, игра продолжит работать."
             },
         )
+        Group("Друзья")
+        Label("Что видят друзья")
+        Choice(listOf(true, false), settings.friendsShare, { if (it) "Во что и где играю" else "Только в сети я или нет" }, { settings.friendsShare = it })
+        Hint(
+            if (settings.friendsShare) "Друзья видят название сборки, версию и сервер, на котором вы играете, — и могут зайти к вам одной кнопкой."
+            else "Друзья видят только, что вы в лаунчере или в игре.",
+        )
+        Label("Сервер друзей")
+        Field(
+            value = settings.friendsServer,
+            onValueChange = { settings.friendsServer = it.trim() },
+            placeholder = FriendsApi.DEFAULT_URL.ifEmpty { "https://имя-проекта.amvera.io" },
+            icon = Icons.Rounded.Dns,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Hint(if (FriendsApi.DEFAULT_URL.isEmpty()) "Адрес сервера друзей на Amvera. У вас и у друзей он должен быть один и тот же." else "Пусто — общий сервер Yumi. Свой адрес нужен, только если вы подняли свой сервер друзей.")
+        if (model.friends.signedIn) {
+            var confirmDelete by remember { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Профиль: ${settings.friendsName}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                OutlinedButton(
+                    onClick = { if (confirmDelete) { model.friends.deleteProfile(); confirmDelete = false } else confirmDelete = true },
+                    shapes = ButtonDefaults.shapes(),
+                ) { Text(if (confirmDelete) "Точно удалить?" else "Удалить профиль") }
+            }
+            Hint("Удаление убирает вас у всех друзей и освобождает имя.")
+        }
+
         Spacer(Modifier.height(4.dp))
         Text("Yumi Launcher 0.1.0", style = type.labelMedium, color = scheme.outline)
     }

@@ -59,6 +59,19 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
     var afterLaunch by stored("afterLaunch", AfterLaunch.Minimize, { runCatching { AfterLaunch.valueOf(it) }.getOrNull() }, { it.name })
     var selectedInstance by stored("selectedInstance", "", { it }, { it })
 
+    /** The friends profile's name and its key from the friends server; empty until one is made. */
+    var friendsName by stored("friendsName", "", { it }, { it })
+    var friendsToken by stored("friendsToken", "", { it }, { it })
+
+    /** Another friends server than the launcher's own; empty for that one. */
+    var friendsServer by stored("friendsServer", "", { it }, { it })
+
+    /** Whether friends see which pack and which server, or only that the player is on. */
+    var friendsShare by stored("friendsShare", true, { it == "true" }, { it.toString() })
+
+    /** The home screen's friends, folded down to their header. */
+    var friendsHidden by stored("friendsHidden", false, { it == "true" }, { it.toString() })
+
     /** Minecraft's own settings — keys, sound, video, language — the same in every pack; see `GameOptions`. */
     var syncOptions by stored("syncOptions", true, { it == "true" }, { it.toString() })
 

@@ -180,6 +180,20 @@ fun FrameWindowScope.LauncherApp(
             ) {
                 NewsCarousel(state.news, { state.news = it }, hidden = settings.newsHidden, onHiddenChange = { settings.newsHidden = it })
             }
+            // Friends in the corner above the news, never under them: the card stops where the news begins.
+            AnimatedVisibility(
+                state.section == Section.Home,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 88.dp, end = 16.dp, bottom = if (settings.newsHidden) 72.dp else 282.dp),
+                enter = fadeIn(tween(300, delayMillis = 200)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { -it / 4 },
+                exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { -it / 4 },
+            ) {
+                FriendsCard(
+                    model,
+                    hidden = settings.friendsHidden,
+                    onHiddenChange = { settings.friendsHidden = it },
+                    onJoin = { pack, address -> play(pack, address) },
+                )
+            }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
             state.serverPack?.let { ServerPackDialog(model, it, onClose = { state.serverPack = null }) }
