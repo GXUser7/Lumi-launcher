@@ -1,6 +1,11 @@
 package com.yumi.launcher
 
+import com.yumi.launcher.core.Download
+import com.yumi.launcher.core.Http
 import com.yumi.launcher.core.LauncherPaths
+import com.yumi.launcher.core.ModHints
+import com.yumi.launcher.core.PackShare
+import com.yumi.launcher.core.ServerPacks
 import com.yumi.launcher.core.Loader
 import com.yumi.launcher.core.Loaders
 import com.yumi.launcher.core.ServerInstaller
@@ -14,11 +19,17 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * `--server-test <version> <folder> [loader] [port]`: installs a dedicated server the way the
- * servers screen does, starts it, waits for "Done", pings it, runs `list` through its console and
- * stops it with `stop`. Exits 0 when all of that worked.
+ * `--server-test <version> <folder> [loader] [port] [--share=<mods folder>] [--install=<folder>]`:
+ * installs a dedicated server the way the servers screen does, starts it, waits for "Done", pings
+ * it, runs `list` through its console and stops it with `stop`. `--share` advertises the jars in
+ * that folder as the server's pack, as "Раздавать сборку" does; after the ping the test prints the
+ * pack a friend's launcher would make for the server, and `--install` downloads its mods there.
+ * Exits 0 when all of that worked.
  */
-internal fun serverTest(args: List<String>): Int = runBlocking {
+internal fun serverTest(all: List<String>): Int = runBlocking {
+    val share = all.firstOrNull { it.startsWith("--share=") }?.removePrefix("--share=")?.let(::File)
+    val install = all.firstOrNull { it.startsWith("--install=") }?.removePrefix("--install=")?.let(::File)
+    val args = all.filterNot { it.startsWith("--") }
     val version = args[0]
     val root = File(args[1]).absoluteFile
     val loader = args.getOrNull(2)?.let { name -> Loader.entries.first { it.name.equals(name, true) } } ?: Loader.Vanilla
@@ -42,6 +53,12 @@ internal fun serverTest(args: List<String>): Int = runBlocking {
         // Loopback only: a test server has no business asking Windows to open the firewall.
         this["server-ip"] = "127.0.0.1"
         this["motd"] = "§bYumi §fтест"
+        if (share != null) {
+            val jars = share.listFiles { f -> f.name.endsWith(".jar") }.orEmpty().sortedBy { it.name }
+            val pack = PackShare.describe(jars, version, loader, loaderVersion, "")
+            println("Раздаём сборку: Modrinth ${pack.modrinth.size}, CurseForge ${pack.curseForge.size}, нигде: ${pack.missing}")
+            this["motd"] = PackShare.withTag("§bYumi §fтест", PackShare.tag(pack))
+        }
         this["level-type"] = if (numericProperties(version)) "FLAT" else "minecraft:flat"
         save()
     }
@@ -68,6 +85,20 @@ internal fun serverTest(args: List<String>): Int = runBlocking {
         ping.onSuccess {
             pinged = true
             println("PING: «${it.motd.joinToString("") { s -> s.text }}» ${it.version} ${it.online}/${it.max} ${it.latencyMs} мс, иконка: ${it.favicon?.size}")
+            println("Моды в пинге: " + when (val hints = it.mods) {
+                is ModHints.Yumi -> "сборка Yumi, ${hints.pack.loader.label} ${hints.pack.minecraft}"
+                is ModHints.Forge -> "Forge: ${hints.mods.joinToString { m -> "${m.id} ${m.version ?: "(только сервер)"}" }}"
+                ModHints.Modded -> "NeoForge, без списка"
+                null -> "ничего"
+            })
+            runCatching { ServerPacks.plan(it, lookup, "") }.onSuccess { plan ->
+                println("План: ${plan.kind}, ${plan.loader.label} ${plan.minecraft} ${plan.loaderVersion.orEmpty()}; найдено ${plan.mods.size} из ${plan.total}: " +
+                    plan.mods.joinToString { m -> "${m.title} ${m.version}" + if (m.exact) "" else " (не точная)" } + "; не нашлись: ${plan.missing}")
+                if (install != null) {
+                    Http.downloadAll(plan.mods.map { m -> Download(m.url, install.resolve(m.fileName), m.sha1, m.size) }) {}
+                    println("Скачано в $install: ${install.list().orEmpty().sorted()}")
+                }
+            }.onFailure { e -> println("План не удался: ${e.message}") }
         }.onFailure { println("PING FAIL: ${it.message}") }
         process.outputStream.write("list\n".toByteArray())
         process.outputStream.flush()

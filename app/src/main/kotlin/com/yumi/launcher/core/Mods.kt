@@ -1,12 +1,15 @@
 package com.yumi.launcher.core
 
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
+import java.io.IOException
 import java.net.URLEncoder
 
 enum class ModSource(val label: String) { Modrinth("Modrinth"), CurseForge("CurseForge") }
@@ -136,6 +139,50 @@ internal object Modrinth : ModCatalog {
         return projectByHash.mapValues { sides[it.value] ?: "unknown" }
     }
 
+    /** The Modrinth version each file is, by SHA-1; files Modrinth does not host are left out. */
+    suspend fun versionsByHash(sha1s: Collection<String>): Map<String, String> {
+        if (sha1s.isEmpty()) return emptyMap()
+        val body = buildJsonObject {
+            put("hashes", JsonArray(sha1s.map { JsonPrimitive(it) }))
+            put("algorithm", JsonPrimitive("sha1"))
+        }
+        val (status, text) = Http.post("$API/version_files", body.toString())
+        if (status != 200) throw IOException("Modrinth не ответил на поиск файлов: HTTP $status")
+        return LauncherJson.parseToJsonElement(text).jsonObject.mapValues { it.value.jsonObject.str("id")!! }
+    }
+
+    /** Versions by id, a hundred to a request. */
+    suspend fun versions(ids: List<String>): List<JsonObject> = ids.chunked(100).flatMap { chunk ->
+        val list = chunk.joinToString(",", "[", "]") { "\"$it\"" }
+        LauncherJson.parseToJsonElement(Http.text("$API/versions?ids=${encode(list)}")).objects()
+    }
+
+    /** Projects by id, a hundred to a request. */
+    suspend fun projects(ids: Collection<String>): List<JsonObject> = ids.distinct().chunked(100).flatMap { chunk ->
+        val list = chunk.joinToString(",", "[", "]") { "\"$it\"" }
+        LauncherJson.parseToJsonElement(Http.text("$API/projects?ids=${encode(list)}")).objects()
+    }
+
+    /** The project whose slug or id is [slugOrId], or null when there is none. */
+    suspend fun project(slugOrId: String): JsonObject? = try {
+        LauncherJson.parseToJsonElement(Http.text("$API/project/${encode(slugOrId)}")).jsonObject
+    } catch (e: HttpRefused) {
+        null
+    }
+
+    /** Every version of a project for a game version and loader, newest first. */
+    suspend fun projectVersions(projectId: String, minecraft: String, loader: Loader): List<JsonObject> {
+        val url = "$API/project/${encode(projectId)}/version?loaders=${encode(loaders(loader).joinToString(",", "[", "]") { "\"$it\"" })}" +
+            "&game_versions=${encode("[\"$minecraft\"]")}"
+        return LauncherJson.parseToJsonElement(Http.text(url)).objects()
+    }
+
+    suspend fun searchRaw(query: String, minecraft: String, loader: Loader): List<JsonObject> {
+        val facets = "[[\"project_type:mod\"],[\"versions:$minecraft\"],[${loaders(loader).joinToString(",") { "\"categories:$it\"" }}]]"
+        val url = "$API/search?query=${encode(query)}&facets=${encode(facets)}&limit=10"
+        return LauncherJson.parseToJsonElement(Http.text(url)).jsonObject["hits"]!!.objects()
+    }
+
     private fun hit(o: JsonObject, idKey: String) = ModHit(
         source = ModSource.Modrinth,
         id = o.str(idKey)!!,
@@ -203,6 +250,43 @@ internal class CurseForge(private val key: String) : ModCatalog {
     }
 
     private suspend fun data(url: String) = LauncherJson.parseToJsonElement(Http.text(url, headers)).jsonObject["data"]!!
+
+    private suspend fun postData(url: String, body: String): JsonElement {
+        val (status, text) = Http.post(url, body, headers)
+        if (status == 401 || status == 403) throw IOException("CurseForge не принял ключ — проверьте его в настройках")
+        if (status != 200) throw IOException("CurseForge ответил HTTP $status")
+        return LauncherJson.parseToJsonElement(text).jsonObject["data"]!!
+    }
+
+    /** CurseForge files matching [jars] exactly, by fingerprint; jars it does not know are left out. */
+    suspend fun filesByFingerprint(jars: List<File>): Map<File, CurseFile> {
+        val prints = jars.associateWith(::curseFingerprint)
+        val matches = postData("$API/fingerprints/$MINECRAFT", idsBody("fingerprints", prints.values.distinct())).jsonObject["exactMatches"]?.objects().orEmpty()
+        val byPrint = matches.mapNotNull { match ->
+            val file = match.obj("file") ?: return@mapNotNull null
+            val print = file.long("fileFingerprint") ?: return@mapNotNull null
+            print to CurseFile(file.long("modId") ?: match.long("id") ?: return@mapNotNull null, file.long("id") ?: return@mapNotNull null)
+        }.toMap()
+        return prints.mapNotNull { (jar, print) -> byPrint[print]?.let { jar to it } }.toMap()
+    }
+
+    /** Files by id, fifty to a request. */
+    suspend fun files(ids: List<Long>): List<JsonObject> = ids.chunked(50).flatMap { chunk -> postData("$API/mods/files", idsBody("fileIds", chunk)).objects() }
+
+    /** Projects by id, fifty to a request. */
+    suspend fun mods(ids: Collection<Long>): List<JsonObject> = ids.distinct().chunked(50).flatMap { chunk -> postData("$API/mods", idsBody("modIds", chunk)).objects() }
+
+    /** Projects whose slug is exactly [slug]. */
+    suspend fun bySlug(slug: String): List<JsonObject> = data("$API/mods/search?gameId=$MINECRAFT&classId=$MODS&slug=${encode(slug)}").objects()
+
+    suspend fun searchRaw(query: String, minecraft: String, loader: Loader): List<JsonObject> =
+        data("$API/mods/search?gameId=$MINECRAFT&classId=$MODS&searchFilter=${encode(query)}&gameVersion=${encode(minecraft)}&modLoaderType=${loaderType(loader)}&pageSize=10").objects()
+
+    /** A project's files for a game version, newest first; old files often name no loader, so it is asked for only when [loader] is set. */
+    suspend fun projectFiles(modId: Long, minecraft: String, loader: Loader?): List<JsonObject> {
+        val filter = loader?.let { "&modLoaderType=${loaderType(it)}" }.orEmpty()
+        return data("$API/mods/$modId/files?gameVersion=${encode(minecraft)}$filter&pageSize=50").objects()
+    }
 
     private fun hit(o: JsonObject) = ModHit(
         source = ModSource.CurseForge,

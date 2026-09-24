@@ -123,8 +123,11 @@ private fun launcher(args: Array<String>) = application {
                     )
                 }
                 LauncherPaths.config.resolve("servers.json").apply { parentFile.mkdirs() }.writeText(
-                    """[{"id":"hypixel","name":"Hypixel","address":"mc.hypixel.net"},{"id":"friend","name":"Сервер Димы","address":"127.0.0.1:25599"}]""",
+                    """[{"id":"hypixel","name":"Hypixel","address":"mc.hypixel.net"},{"id":"friend","name":"Сервер Димы","address":"127.0.0.1:25599"},""" +
+                        """{"id":"gone","name":"Старый сервер","address":"127.0.0.1:25598"}]""",
                 )
+                // Dima's answers, and shares his pack; the old one is gone.
+                smokeFriendServer(25599)
             }
         }
     }
@@ -151,6 +154,16 @@ private fun launcher(args: Array<String>) = application {
                     delay(wait)
                     val area = Rectangle(window.contentPane.locationOnScreen, window.contentPane.size)
                     ImageIO.write(Robot().createScreenCapture(area), "png", File(output, "$name.png"))
+                }
+                // Presses the left button over the window at x, y without moving the real pointer.
+                fun click(x: Int, y: Int) {
+                    val target = SwingUtilities.getDeepestComponentAt(window.contentPane, x, y) ?: return
+                    val at = SwingUtilities.convertPoint(window.contentPane, x, y, target)
+                    val time = System.currentTimeMillis()
+                    for (id in listOf(MouseEvent.MOUSE_MOVED, MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED)) {
+                        val mask = if (id == MouseEvent.MOUSE_MOVED) 0 else MouseEvent.BUTTON1_DOWN_MASK
+                        target.dispatchEvent(MouseEvent(target, id, time, if (id == MouseEvent.MOUSE_RELEASED) 0 else mask, at.x, at.y, 1, false, MouseEvent.BUTTON1))
+                    }
                 }
                 // Turns the wheel over the window at x, y without moving the real pointer.
                 fun wheel(x: Int, y: Int, clicks: Int) {
@@ -221,6 +234,14 @@ private fun launcher(args: Array<String>) = application {
                         state.serverView = ServerView.List
                         state.serversTab = ServersTab.QuickJoin
                     }
+                    shot("quick-join-pack-$suffix", 5000) {
+                        state.section = Section.Servers
+                        state.serversTab = ServersTab.QuickJoin
+                        state.serverPack = "friend"
+                    }
+                    // "Создать сборку", once: the pack downloads, the dialog closes, Dima's server gets it.
+                    if (theme == ThemeMode.Light) shot("quick-join-packed-$suffix", 12000) { click(800, 484) }
+                    state.serverPack = null
                     shot("ely-signin-$suffix", 1500) {
                         state.section = Section.Home
                         settings.account = AccountKind.ElyBy

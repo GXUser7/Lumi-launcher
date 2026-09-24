@@ -135,7 +135,7 @@ fun ServersScreen(model: LauncherModel, state: LauncherState, onJoin: (Instance?
                         },
                     )
                 } else {
-                    QuickJoinPane(model, onJoin)
+                    QuickJoinPane(model, onJoin, onServerPack = { state.serverPack = it.id })
                 }
             }
         }

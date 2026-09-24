@@ -186,6 +186,12 @@ class ModManager(private val model: LauncherModel, private val scope: CoroutineS
     /** File name → title, for the mods the launcher installed into [instance]. */
     fun titles(instance: Instance): Map<String, String> = load(instance).associate { it.fileName to it.title }
 
+    /** Remembers mods put into [instance] other than from the catalogue — for a server — so the list shows their names. */
+    internal fun record(instance: Instance, mods: List<InstalledMod>) {
+        val names = mods.map { it.fileName }.toSet()
+        save(instance, load(instance).filter { it.fileName !in names } + mods)
+    }
+
     private fun metaFile(instance: Instance) = model.instances.folder(instance).resolve("mods.json")
 
     private fun load(instance: Instance): List<InstalledMod> = runCatching {

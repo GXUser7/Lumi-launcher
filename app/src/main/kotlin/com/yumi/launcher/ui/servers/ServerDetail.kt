@@ -49,6 +49,7 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Check
@@ -127,6 +128,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.PackShare
 import com.yumi.launcher.core.ServerPing
 import com.yumi.launcher.data.BannedPlayer
 import com.yumi.launcher.data.Difficulty
@@ -655,11 +657,13 @@ private data class ServerForm(
     val seed: String,
     val memoryMb: Int,
     val jvmArgs: String,
+    val sharePack: Boolean,
 ) {
     companion object {
         fun read(profile: ServerProfile, props: ServerProperties) = ServerForm(
             name = profile.name,
-            motd = props["motd"] ?: profile.name,
+            // The pack a running server shares sits in the description's hidden lines; not the owner's to edit.
+            motd = PackShare.strip(props["motd"] ?: profile.name),
             port = props.int("server-port", 25565).toString(),
             maxPlayers = props.int("max-players", 20).toString(),
             mode = GameMode.of(props["gamemode"]),
@@ -673,6 +677,7 @@ private data class ServerForm(
             seed = props["level-seed"].orEmpty(),
             memoryMb = profile.memoryMb,
             jvmArgs = profile.jvmArgs,
+            sharePack = profile.sharePack,
         )
     }
 }
@@ -719,7 +724,9 @@ private fun ServerSettings(model: LauncherModel, profile: ServerProfile, session
         if (!worldExists) props["level-seed"] = form.seed.trim()
         props.save()
         manager[profile.id]?.let {
-            manager.save(it.copy(name = form.name.trim().ifEmpty { it.name }, auth = form.auth, memoryMb = form.memoryMb, jvmArgs = form.jvmArgs.trim()))
+            manager.save(
+                it.copy(name = form.name.trim().ifEmpty { it.name }, auth = form.auth, memoryMb = form.memoryMb, jvmArgs = form.jvmArgs.trim(), sharePack = form.sharePack),
+            )
         }
         form = form.copy(name = form.name.trim().ifEmpty { profile.name }, maxPlayers = (slots ?: 20).coerceAtLeast(1).toString())
         saved = form
@@ -759,6 +766,17 @@ private fun ServerSettings(model: LauncherModel, profile: ServerProfile, session
                     modifier = Modifier.fillMaxWidth(),
                 )
                 ServerListPreview(model, profile, form.name.ifBlank { profile.name }, ServerPing.motdOf(form.motd), slots ?: 20)
+                ToggleRow(
+                    "Раздавать сборку",
+                    form.sharePack,
+                    { form = form.copy(sharePack = it) },
+                    icon = Icons.Rounded.Inventory2,
+                    description = if (form.sharePack) {
+                        "Друзья с Yumi Launcher соберут такую же сборку в «Быстром входе». Список модов прячется в описании — в игре его не видно"
+                    } else {
+                        "Друзьям придётся ставить моды самим"
+                    },
+                )
             }
 
             FormSection("Подключение", Icons.Rounded.Lan) {

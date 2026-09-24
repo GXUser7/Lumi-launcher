@@ -87,6 +87,7 @@ import com.yumi.launcher.ui.components.connectedShapes
 import com.yumi.launcher.ui.console.ConsoleScreen
 import com.yumi.launcher.ui.mods.ModsScreen
 import com.yumi.launcher.ui.packs.PacksScreen
+import com.yumi.launcher.ui.servers.ServerPackDialog
 import com.yumi.launcher.ui.servers.ServersScreen
 import com.yumi.launcher.ui.settings.SettingsScreen
 import com.yumi.launcher.ui.theme.glass
@@ -181,6 +182,7 @@ fun FrameWindowScope.LauncherApp(
             }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
+            state.serverPack?.let { ServerPackDialog(model, it, onClose = { state.serverPack = null }) }
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
             ResizeEdges(windowState)
         }

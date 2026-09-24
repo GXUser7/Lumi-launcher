@@ -47,12 +47,13 @@ internal object Http {
      * A JSON POST. The status comes back with the body instead of as an exception: the APIs posted
      * to explain a refusal in the body, and that explanation is what the player should read.
      */
-    suspend fun post(url: String, json: String): Pair<Int, String> = withContext(Dispatchers.IO) {
+    suspend fun post(url: String, json: String, headers: Map<String, String> = emptyMap()): Pair<Int, String> = withContext(Dispatchers.IO) {
         retry("Не удалось связаться с ${URI.create(url).host}") {
-            val request = request(url)
+            val builder = request(url)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build()
+            headers.forEach { (name, value) -> builder.header(name, value) }
+            val request = builder.build()
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() >= 500) throw IOException("HTTP ${response.statusCode()}")
             response.statusCode() to response.body()

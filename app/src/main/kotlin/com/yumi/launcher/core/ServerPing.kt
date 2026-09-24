@@ -36,6 +36,8 @@ data class PingResult(
     val players: List<String>,
     val favicon: ByteArray?,
     val latencyMs: Long,
+    /** What the server gives away about its mods; null when it says nothing. */
+    val mods: ModHints? = null,
 )
 
 /**
@@ -133,14 +135,18 @@ internal object ServerPing {
     private fun parseStatus(status: JsonObject, latency: Long): PingResult {
         val players = status.obj("players")
         val favicon = status.str("favicon")?.substringAfter("base64,", "")?.takeIf { it.isNotEmpty() }
+        val description = status["description"]
+        // A pack shared by Yumi Launcher rides in the description's hidden lines; nobody should see it.
+        val shared = description?.let(PackShare::find)
         return PingResult(
-            motd = status["description"]?.let(::motd).orEmpty(),
+            motd = description?.let { motd(PackShare.scrub(it)) }.orEmpty(),
             version = status.obj("version")?.str("name").orEmpty(),
             online = players?.get("online")?.jsonPrimitive?.intOrNull ?: 0,
             max = players?.get("max")?.jsonPrimitive?.intOrNull ?: 0,
             players = players?.get("sample")?.jsonArray.orEmpty().mapNotNull { (it as? JsonObject)?.str("name") },
             favicon = favicon?.let { runCatching { Base64.getMimeDecoder().decode(it) }.getOrNull() },
             latencyMs = latency,
+            mods = runCatching { ServerPacks.hints(status, shared) }.getOrNull(),
         )
     }
 

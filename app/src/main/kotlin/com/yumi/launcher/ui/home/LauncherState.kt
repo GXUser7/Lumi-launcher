@@ -73,6 +73,9 @@ class LauncherState {
     /** The Ely.by sign-in form is over the window. */
     var elySignIn by mutableStateOf(false)
 
+    /** The quick-join server whose pack is being made, over the window. */
+    var serverPack by mutableStateOf<String?>(null)
+
     fun openPacks(request: PackRequest? = null) {
         packRequest = request
         section = Section.Packs

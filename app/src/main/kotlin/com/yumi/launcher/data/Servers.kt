@@ -9,6 +9,7 @@ import com.yumi.launcher.core.LauncherJson
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.Loader
 import com.yumi.launcher.core.Loaders
+import com.yumi.launcher.core.PackShare
 import com.yumi.launcher.core.ServerInstaller
 import com.yumi.launcher.core.ServerMods
 import kotlinx.coroutines.CancellationException
@@ -62,6 +63,8 @@ data class ServerProfile(
     val launch: List<String> = emptyList(),
     /** Mods a sync copied in from the pack, so the next one can take back those the pack dropped. */
     val syncedMods: List<String> = emptyList(),
+    /** Tell friends' launchers which pack to join with, in the description's hidden lines; see [PackShare]. */
+    val sharePack: Boolean = true,
 ) {
     val signature: String get() = "$version|$loader|${loaderVersion.orEmpty()}"
 }
@@ -304,9 +307,12 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
                     save(profile)
                 }
                 val injector = if (profile.auth == ServerAuth.ElyBy) AuthlibInjector.ensure() else null
+                val shared = if (profile.sharePack) share(profile, session) else null
                 withContext(Dispatchers.IO) {
                     properties(profile).apply {
                         this["online-mode"] = (profile.auth != ServerAuth.Offline).toString()
+                        val motd = this["motd"] ?: profile.name
+                        this["motd"] = if (shared != null) PackShare.withTag(motd, shared) else PackShare.strip(motd)
                         save()
                     }
                     val eula = folder(profile).resolve("eula.txt")
@@ -350,6 +356,36 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
             } catch (e: Exception) {
                 session.status = ServerStatus.Failed(e.message ?: e.toString())
             }
+        }
+    }
+
+    /**
+     * The pack the server was made from, told for friends' launchers: its mods by where they come
+     * from. Null — with a line in the terminal saying why — when there is no pack, it could not be
+     * looked up, or it would not fit in the server's answer.
+     */
+    private suspend fun share(profile: ServerProfile, session: ServerSession): String? {
+        val pack = model.instances[profile.packId] ?: return null
+        session.status = ServerStatus.Installing("Сборка для игроков", 0f)
+        val jars = model.instances.modsDir(pack).listFiles { f -> f.isFile && f.name.endsWith(".jar") }.orEmpty().sortedBy { it.name }
+        return try {
+            val described = PackShare.describe(jars, profile.version, profile.loader, profile.loaderVersion ?: pack.loaderVersion, model.settings.curseForgeKey)
+            val tag = PackShare.tag(described)
+            if (tag.length > PackShare.MAX_TAG) {
+                session.append(listOf("[Yumi] Сборка слишком большая, чтобы раздавать её игрокам через описание сервера"))
+                return null
+            }
+            val found = jars.size - described.missing.size
+            session.append(
+                listOf(
+                    "[Yumi] Игроки с Yumi Launcher соберут такую же сборку в «Быстром входе»: $found из ${jars.size} модов" +
+                        if (described.missing.isEmpty()) "" else ". Нет на Modrinth и CurseForge — передайте друзьям сами: ${described.missing.joinToString(", ")}",
+                ),
+            )
+            tag
+        } catch (e: Exception) {
+            session.append(listOf("[Yumi] Не удалось описать сборку для игроков: ${e.message}"))
+            null
         }
     }
 

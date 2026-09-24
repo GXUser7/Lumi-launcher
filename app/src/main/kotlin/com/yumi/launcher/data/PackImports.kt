@@ -12,11 +12,13 @@ import com.yumi.launcher.core.PackArchives
 import com.yumi.launcher.core.PackCatalog
 import com.yumi.launcher.core.PackHit
 import com.yumi.launcher.core.PackRelease
+import com.yumi.launcher.core.ServerPlan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -56,6 +58,33 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
         Http.downloadAll(listOf(Download(release.url, archive, release.sha1, release.size))) { report(it * 0.1f) }
         val server = release.serverId?.takeIf { it > 0 }?.let { PackCatalog.serverRelease(project.id, it, key) }
         importArchive(archive, server, project.icon, icon, 0.1f)
+    }
+
+    /**
+     * A pack for [server] from what its ping gave away ([plan]): the game, the loader and the mods
+     * found for it. It becomes the pack that server is joined with.
+     */
+    internal fun installForServer(server: SavedServer, plan: ServerPlan, icon: Int) = start(server.name, "server:${server.id}") {
+        val instances = model.instances
+        val pack = instances.create(server.name, plan.minecraft, icon)
+        try {
+            instances.save(pack.copy(loader = plan.loader, loaderVersion = plan.loaderVersion))
+            stage = "Скачиваем моды"
+            val mods = instances.modsDir(pack)
+            Http.downloadAll(plan.mods.map { Download(it.url, mods.resolve(it.fileName), it.sha1, it.size) }) { report(it * 0.98f) }
+            withContext(Dispatchers.IO) {
+                model.mods.record(pack, plan.mods.map { InstalledMod(it.fileName, it.source, it.projectId, it.title, it.iconUrl, it.version) })
+            }
+            report(1f)
+            instances[pack.id]?.let {
+                model.select(it)
+                model.quickJoin[server.id]?.let { saved -> model.quickJoin.update(saved.copy(packId = it.id)) }
+                finished = it
+            }
+        } catch (e: Throwable) {
+            instances.delete(pack)
+            throw e
+        }
     }
 
     fun cancel() {

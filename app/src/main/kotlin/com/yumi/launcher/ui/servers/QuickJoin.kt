@@ -74,7 +74,7 @@ import org.jetbrains.skia.Image as SkiaImage
 
 /** Other people's servers: add by address, see who is on, join with a pack in one click. */
 @Composable
-internal fun QuickJoinPane(model: LauncherModel, onJoin: (Instance?, String) -> Unit) {
+internal fun QuickJoinPane(model: LauncherModel, onJoin: (Instance?, String) -> Unit, onServerPack: (SavedServer) -> Unit) {
     val list = model.quickJoin
     var address by remember { mutableStateOf("") }
     val add = {
@@ -118,13 +118,13 @@ internal fun QuickJoinPane(model: LauncherModel, onJoin: (Instance?, String) -> 
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(list.all, key = { it.id }) { server ->
-            SavedServerRow(model, server, list.pings[server.id], onJoin)
+            SavedServerRow(model, server, list.pings[server.id], onJoin, onServerPack)
         }
     }
 }
 
 @Composable
-private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: PingState?, onJoin: (Instance?, String) -> Unit) {
+private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: PingState?, onJoin: (Instance?, String) -> Unit, onServerPack: (SavedServer) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val list = model.quickJoin
     val pack = model.instances[server.packId] ?: model.selected
@@ -164,6 +164,7 @@ private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: Ping
             if (ping is PingState.Online && ping.result.motd.isNotEmpty()) MotdStrip(ping.result.motd)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PackChip(model, pack) { list.update(server.copy(packId = it.id)) }
+                if (ping is PingState.Online) ServerPackChip(ping.result.mods) { onServerPack(server) }
                 versionMismatch(ping, pack)?.let { warning ->
                     Icon(Icons.Rounded.WarningAmber, null, Modifier.size(16.dp), tint = scheme.error)
                     Text(warning, style = MaterialTheme.typography.bodySmall, color = scheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
