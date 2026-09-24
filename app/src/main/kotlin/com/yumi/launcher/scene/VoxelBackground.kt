@@ -30,6 +30,8 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.VertexMode
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
@@ -153,13 +155,17 @@ internal class VoxelRenderer(private val scene: Scene) {
     private var blend = -1f
     private var now = 0f
 
-    // The camera: the pose it flies from, the one it flies to, and how far along it is.
+    // The camera: the pose it flies from, how far along it is, the place it is leaving.
     private var from: Pose? = null
-    private var to: Pose? = null
     private var flight = 1f
     private var heading: SceneSpot? = null
+    private var leaving: CameraPose? = null
     private var orbitYaw = 0f
     private val pose = Pose()
+    private val eye0 = FloatArray(3)
+    private val eye1 = FloatArray(3)
+    private val out0 = FloatArray(3)
+    private val in1 = FloatArray(3)
 
     // Camera basis for the frame being drawn.
     private val cam = FloatArray(3)
@@ -208,6 +214,10 @@ internal class VoxelRenderer(private val scene: Scene) {
         if (quality >= SceneQuality.High) drawGlows(t, quality)
         if (quality >= SceneQuality.Medium) drawParticles(t, dt, quality)
         if (quality == SceneQuality.Ultra) drawBirds(t)
+        if (quality >= SceneQuality.High) {
+            drawFlare(quality)
+            drawVignette()
+        }
     }
 
     // ---------- camera ----------
@@ -242,8 +252,7 @@ internal class VoxelRenderer(private val scene: Scene) {
 
     /**
      * Works out this frame's camera. Changing the spot starts a flight from wherever the camera is
-     * to the new place: target, angles and distance ease together, and half-way the camera pulls
-     * back and up, so it arcs over the island instead of cutting through the trees.
+     * to the new place; see [fly].
      */
     private fun camera(t: Float, dt: Float, w: Float, h: Float) {
         val target = spot
@@ -252,33 +261,31 @@ internal class VoxelRenderer(private val scene: Scene) {
         if (config.orbit && flight >= 1f && motion != SceneMotion.Mouse) orbitYaw += dt * 0.05f
         if (heading != target) {
             val first = heading == null
+            // The camera backs out along its line of sight the way the place it was headed for is
+            // entered — also when it had not quite got there, or it would cut through the doorway's beam.
+            leaving = heading?.let { scene.spots.getValue(it) }
             from = if (first) poseOf(target) else pose.copy()
             heading = target
             flight = if (first) 1f else 0f
         }
-        to = poseOf(target)
-        val start = from ?: to!!
-        val end = to!!
-        if (flight < 1f) flight = min(1f, flight + dt / 1.9f)
-        val e = flight * flight * flight * (flight * (flight * 6 - 15) + 10)
-        val arc = sin(PI.toFloat() * e)
-        for (i in 0..2) pose.target[i] = start.target[i] + (end.target[i] - start.target[i]) * e
-        var dy = end.yaw - start.yaw
-        dy = ((dy + PI.toFloat()) % (2 * PI.toFloat()) + 2 * PI.toFloat()) % (2 * PI.toFloat()) - PI.toFloat()
-        pose.yaw = start.yaw + dy * e
-        val travel = sqrt((0..2).sumOf { ((end.target[it] - start.target[it]) * (end.target[it] - start.target[it])).toDouble() }).toFloat()
-        pose.distance = start.distance + (end.distance - start.distance) * e + arc * min(14f, travel * 0.45f)
-        pose.pitch = start.pitch + (end.pitch - start.pitch) * e + arc * 0.16f
-        pose.fov = start.fov + (end.fov - start.fov) * e
-        pose.offsetX = start.offsetX + (end.offsetX - start.offsetX) * e
+        val end = poseOf(target)
+        if (flight < 1f) {
+            flight = min(1f, flight + dt / FLIGHT)
+            fly(from ?: end, end, config)
+        } else {
+            pose.set(end)
+        }
 
-        // On top of the pose: a slow breath for the places, the pointer for all of them.
+        // On top of the pose: for the places a slow slide and push, as on a camera slider; the
+        // pointer for all of them.
         var yaw = pose.yaw
         var pitch = pose.pitch
+        var distance = pose.distance
         val parallaxAmount = if (config.orbit) 0.12f else 0.07f
         if (!config.orbit && motion != SceneMotion.Mouse) {
-            yaw += sin(t * 0.21f) * 0.035f
-            pitch += sin(t * 0.27f) * 0.012f
+            yaw += sin(t * 0.14f) * 0.045f
+            pitch += sin(t * 0.19f) * 0.012f
+            distance *= 1 + 0.035f * sin(t * 0.11f + 1f)
         }
         when (motion) {
             SceneMotion.Rotate -> Unit
@@ -286,9 +293,9 @@ internal class VoxelRenderer(private val scene: Scene) {
             SceneMotion.Both -> { yaw += px * parallaxAmount; pitch += py * parallaxAmount * 0.4f }
         }
         val tgt = pose.target
-        cam[0] = tgt[0] + pose.distance * cos(pitch) * sin(yaw)
-        cam[1] = tgt[1] + pose.distance * sin(pitch)
-        cam[2] = tgt[2] + pose.distance * cos(pitch) * cos(yaw)
+        cam[0] = tgt[0] + distance * cos(pitch) * sin(yaw)
+        cam[1] = tgt[1] + distance * sin(pitch)
+        cam[2] = tgt[2] + distance * cos(pitch) * cos(yaw)
         setNormalized(fwd, tgt[0] - cam[0], tgt[1] - cam[1], tgt[2] - cam[2])
         // right = fwd × up(0,1,0), up = right × fwd
         setNormalized(right, -fwd[2], 0f, fwd[0])
@@ -299,6 +306,61 @@ internal class VoxelRenderer(private val scene: Scene) {
         ox = w * (0.5f + pose.offsetX)
         oy = h * 0.5f
         horizonY = direction(fwd[0], 0f, fwd[2])?.y ?: (h / 2)
+    }
+
+    /**
+     * One frame of a flight. The eye travels a curve that backs out of the place it leaves the way
+     * it came in, swings up over the island, and comes into the new place along that place's own
+     * line of sight, from behind and a little above — so it enters a room through its open side,
+     * not through the roof. What it looks at slides across on its own.
+     */
+    private fun fly(start: Pose, end: Pose, config: CameraPose) {
+        val e = smootherstep(0f, 1f, flight)
+        eyeOf(start, eye0)
+        eyeOf(end, eye1)
+        val exit = leaving
+        backOff(eye0, start.target, exit?.pull ?: 0f, exit?.rise ?: 2f, out0)
+        backOff(eye1, end.target, config.pull, config.rise, in1)
+        val travel = sqrt((0..2).sumOf { ((eye1[it] - eye0[it]) * (eye1[it] - eye0[it])).toDouble() }).toFloat()
+        // Up over whatever lies between, gone again well before either end.
+        val lift = (4 * e * (1 - e)).pow(4) * min(12f, travel * 0.45f)
+        // A quintic curve with its inner points doubled: the eye leaves and arrives along a
+        // straight line, not a bend that could clip a beam by the door.
+        val u = 1 - e
+        val w0 = u * u * u * u * u
+        val w1 = 5 * u * u * u * u * e + 10 * u * u * u * e * e
+        val w2 = 10 * u * u * e * e * e + 5 * u * e * e * e * e
+        val w3 = e * e * e * e * e
+        val look = pose.target
+        var dx = 0f
+        var dy = 0f
+        var dz = 0f
+        for (i in 0..2) {
+            val at = w0 * eye0[i] + w1 * out0[i] + w2 * in1[i] + w3 * eye1[i] + (if (i == 1) lift else 0f)
+            look[i] = start.target[i] + (end.target[i] - start.target[i]) * e
+            when (i) { 0 -> dx = at - look[i]; 1 -> dy = at - look[i]; else -> dz = at - look[i] }
+        }
+        pose.distance = max(0.5f, sqrt(dx * dx + dy * dy + dz * dz))
+        pose.yaw = atan2(dx, dz)
+        pose.pitch = asin((dy / pose.distance).coerceIn(-1f, 1f))
+        pose.fov = start.fov + (end.fov - start.fov) * e
+        pose.offsetX = start.offsetX + (end.offsetX - start.offsetX) * e
+    }
+
+    private fun eyeOf(p: Pose, out: FloatArray) {
+        out[0] = p.target[0] + p.distance * cos(p.pitch) * sin(p.yaw)
+        out[1] = p.target[1] + p.distance * sin(p.pitch)
+        out[2] = p.target[2] + p.distance * cos(p.pitch) * cos(p.yaw)
+    }
+
+    /** [eye] moved [pull] further from [target] along the ground and [rise] up: where a flight meets a place. */
+    private fun backOff(eye: FloatArray, target: FloatArray, pull: Float, rise: Float, out: FloatArray) {
+        val hx = eye[0] - target[0]
+        val hz = eye[2] - target[2]
+        val l = sqrt(hx * hx + hz * hz).takeIf { it > 1e-3f } ?: 1f
+        out[0] = eye[0] + hx / l * pull
+        out[1] = eye[1] + rise
+        out[2] = eye[2] + hz / l * pull
     }
 
     // ---------- sky ----------
@@ -368,6 +430,8 @@ internal class VoxelRenderer(private val scene: Scene) {
                 // Rays: a quick ripple over a slow swell, both drifting along the curtain.
                 val rays = (0.55f + 0.45f * sin(a * 41f + t * 1.3f + band)) * (0.6f + 0.4f * sin(a * 11f - t * 0.45f + band * 2f))
                 val strength = rays * smoothstep(0f, 0.22f, s) * smoothstep(1f, 0.78f, s) * blend * curtain[3]
+                // The colours drift along the curtain and over time, green and violet to teal and pink.
+                val shift = 0.5f + 0.5f * sin(t * 0.12f + band * 1.3f + a * 1.7f)
                 val column = columns[i % 2]
                 var ok = true
                 for (row in 0 until rows) {
@@ -375,7 +439,13 @@ internal class VoxelRenderer(private val scene: Scene) {
                     if (at == null) { ok = false; break }
                     column.x[row] = at.x
                     column.y[row] = at.y
-                    column.c[row] = argbOf(AURORA_ALPHA[row] * strength, AURORA_TINT[row * 3], AURORA_TINT[row * 3 + 1], AURORA_TINT[row * 3 + 2])
+                    val j = row * 3
+                    column.c[row] = argbOf(
+                        AURORA_ALPHA[row] * strength,
+                        AURORA_TINT[j] + (AURORA_SHIFT[j] - AURORA_TINT[j]) * shift,
+                        AURORA_TINT[j + 1] + (AURORA_SHIFT[j + 1] - AURORA_TINT[j + 1]) * shift,
+                        AURORA_TINT[j + 2] + (AURORA_SHIFT[j + 2] - AURORA_TINT[j + 2]) * shift,
+                    )
                 }
                 if (ok && previous) {
                     val last = columns[(i + 1) % 2]
@@ -552,8 +622,10 @@ internal class VoxelRenderer(private val scene: Scene) {
         val base = f.color
         for (k in 0 until 4) {
             val ao = f.ao[k]
-            val vd = (dl.ambient * ao + dl.diffuse * sunFacing) * underside
-            val vn = (nl.ambient * ao + nl.diffuse * moonFacing) * underside
+            val ad = dl.ambient * ao * underside
+            val sd = dl.diffuse * sunFacing * underside
+            val an = nl.ambient * ao * underside
+            val sn = nl.diffuse * moonFacing * underside
             val dayEmit = emit * day.cloudGlow
             val nightEmit = emit * nightLook.cloudGlow
             var r = 0f
@@ -561,8 +633,8 @@ internal class VoxelRenderer(private val scene: Scene) {
             var b = 0f
             for (ch in 0 until 3) {
                 val c = ((base shr (16 - ch * 8)) and 0xFF).toFloat()
-                val dayC = c * (vd * dl.tint[ch] * (1 - dayEmit) + 1.12f * dayEmit)
-                val nightC = c * (vn * nl.tint[ch] * (1 - nightEmit) + 1.12f * nightEmit)
+                val dayC = c * ((ad * dl.sky[ch] + sd * dl.tint[ch]) * (1 - dayEmit) + 1.12f * dayEmit)
+                val nightC = c * ((an * nl.sky[ch] + sn * nl.tint[ch]) * (1 - nightEmit) + 1.12f * nightEmit)
                 val lit = (dayC * d + nightC * n) * clear + fogColor(ch) * haze
                 when (ch) { 0 -> r = lit; 1 -> g = lit; else -> b = lit }
             }
@@ -616,16 +688,19 @@ internal class VoxelRenderer(private val scene: Scene) {
                 val sunLit = if (shadows) f.sun[k] else exposure
                 val moonLit = if (shadows) f.moon[k] else exposure
                 val overcast = if (cloudy && sunFacing > 0f && sunLit > 0f) cloudShadow(f.corners[k * 3], f.corners[k * 3 + 2], t) else 1f
-                val vd = (dl.ambient * sky * ao + dl.diffuse * sunFacing * sunLit * overcast) * f.shade
-                val vn = (nl.ambient * sky * ao + nl.diffuse * moonFacing * moonLit) * f.shade
+                // Sky light fills the shadows in its own colour; the sun or the moon adds theirs where they reach.
+                val ad = dl.ambient * sky * ao * f.shade
+                val sd = dl.diffuse * sunFacing * sunLit * overcast * f.shade
+                val an = nl.ambient * sky * ao * f.shade
+                val sn = nl.diffuse * moonFacing * moonLit * f.shade
                 val torch = if (torches > 0f) TORCH_CURVE[(f.torch[k] * 15).toInt().coerceIn(0, 15)] * torches * ao else 0f
                 val source = f.source[k]
                 val glow = if (source >= 0) world.lights[source].glow else Glow.Warm
                 val flick = if (source >= 0) flicker[source] else 1f
                 val gain = 1 + ripple * (if (k % 2 == 0) 1f else -1f)
-                var r = ((vd * dl.tint[0]) * d + (vn * nl.tint[0]) * n + torch * glow.r * flick) * gain
-                var g = ((vd * dl.tint[1]) * d + (vn * nl.tint[1]) * n + torch * glow.g * flick) * gain
-                var b = ((vd * dl.tint[2]) * d + (vn * nl.tint[2]) * n + torch * glow.b * flick) * gain
+                var r = ((ad * dl.sky[0] + sd * dl.tint[0]) * d + (an * nl.sky[0] + sn * nl.tint[0]) * n + torch * glow.r * flick) * gain
+                var g = ((ad * dl.sky[1] + sd * dl.tint[1]) * d + (an * nl.sky[1] + sn * nl.tint[1]) * n + torch * glow.g * flick) * gain
+                var b = ((ad * dl.sky[2] + sd * dl.tint[2]) * d + (an * nl.sky[2] + sn * nl.tint[2]) * n + torch * glow.b * flick) * gain
                 if (f.emit > 0f) {
                     r = max(r, f.emit)
                     g = max(g, f.emit)
@@ -841,7 +916,12 @@ internal class VoxelRenderer(private val scene: Scene) {
 
     // ---------- glows and particles ----------
 
-    /** High and up: a soft halo over each light, stronger at night, hidden behind whatever blocks it. */
+    /**
+     * High and up: a soft halo over each light, stronger at night, hidden behind whatever blocks it.
+     * Each one breathes on its own beat; the portal's drifts between violet and magenta, the soul
+     * lanterns' between cyan and ice blue. At night a light also gets the star a lens draws on a
+     * bright point: two thin crossed streaks, slowly turning and twinkling.
+     */
     private fun DrawScope.drawGlows(t: Float, quality: SceneQuality) {
         val strength = 0.22f + 0.78f * blend
         for (g in scene.glows) {
@@ -851,11 +931,111 @@ internal class VoxelRenderer(private val scene: Scene) {
             if (world.hidden(cam[0], cam[1], cam[2], g.x, g.y, g.z)) continue
             val flick = if (g.source in flicker.indices) flicker[g.source] else 1f
             val pulse = if (g.glow == Glow.Portal) 0.85f + 0.15f * sin(t * 2.2f) else 1f
-            val radius = g.radius * focal / dist * (if (quality == SceneQuality.Ultra) 1.25f else 1f)
-            val color = Color(g.glow.r, g.glow.g, g.glow.b)
-            halo(at, radius * 2.2f, color, 0.22f * strength * flick * pulse)
-            halo(at, radius * 0.7f, lerp(color, Color.White, 0.5f), 0.35f * strength * flick * pulse)
+            val phase = g.x * 1.3f + g.z * 0.7f
+            val breath = 0.88f + 0.12f * sin(t * 0.8f + phase)
+            // Up close a halo would fill the frame with one colour: it stays a halo, and softer.
+            val near = 0.35f + 0.65f * smoothstep(2f, 10f, dist)
+            val radius = min(g.radius * focal / dist * (if (quality == SceneQuality.Ultra) 1.25f else 1f), size.height * 0.16f)
+            val base = Color(g.glow.r, g.glow.g, g.glow.b)
+            val color = when (g.glow) {
+                Glow.Portal -> lerp(base, Color(0.95f, 0.35f, 0.9f), 0.5f + 0.5f * sin(t * 0.7f + phase))
+                Glow.Soul -> lerp(base, Color(0.6f, 0.78f, 1f), 0.5f + 0.5f * sin(t * 0.9f + phase))
+                else -> base
+            }
+            val k = strength * flick * pulse * near * breath
+            halo(at, radius * 2.2f, color, 0.22f * k)
+            halo(at, radius * 0.7f, lerp(color, Color.White, 0.5f), 0.35f * k)
+            if (blend > 0.05f) {
+                val twinkle = 0.65f + 0.35f * sin(t * 1.9f + phase * 3f)
+                val turn = 0.35f * sin(t * 0.23f + phase)
+                // The portal is a wall of lights: its stars are fainter, or it turns into a firework.
+                val soft = if (g.glow == Glow.Portal) 0.45f else 1f
+                val length = min(radius * 2.4f, size.height * 0.1f) * twinkle * soft
+                val star = lerp(color, Color.White, 0.4f)
+                streak(at, length, turn, star, 0.5f * blend * k * twinkle * soft)
+                streak(at, length * 0.55f, turn + PI.toFloat() / 2, star, 0.38f * blend * k * twinkle * soft)
+            }
         }
+    }
+
+    /** A thin line of light through [at], fading out at both ends. */
+    private fun DrawScope.streak(at: Offset, length: Float, angle: Float, color: Color, alpha: Float) {
+        if (alpha <= 0.01f || length < 2f) return
+        val dx = cos(angle) * length
+        val dy = sin(angle) * length
+        val a = Offset(at.x - dx, at.y - dy)
+        val b = Offset(at.x + dx, at.y + dy)
+        val brush = Brush.linearGradient(listOf(color.copy(alpha = 0f), color.copy(alpha = alpha.coerceAtMost(1f)), color.copy(alpha = 0f)), a, b)
+        drawLine(brush, a, b, strokeWidth = max(1.2f, length * 0.03f), blendMode = BlendMode.Plus)
+    }
+
+    /**
+     * High and up, by day: what a lens does looking towards the sun — a row of faint coloured rings
+     * and hexagons on the line from the sun through the middle of the picture, stronger the nearer
+     * the sun is to the middle, and on Ultra a long thin streak across it. Only while the sun is in
+     * the frame and not behind the island.
+     */
+    private fun DrawScope.drawFlare(quality: SceneQuality) {
+        val day = 1f - blend
+        if (day <= 0.05f) return
+        val sun = normalize(scene.sun[0], 0.1f, scene.sun[2])
+        val at = direction(sun[0], sun[1], sun[2]) ?: return
+        val w = size.width
+        val h = size.height
+        if (at.x < -w * 0.05f || at.x > w * 1.05f || at.y < -h * 0.05f || at.y > h * 1.05f) return
+        if (occluded(sun)) return
+        val centre = Offset(w * 0.5f, h * 0.5f)
+        val reach = (1f - (at - centre).getDistance() / (h * 1.1f)).coerceIn(0f, 1f)
+        val k = day * (0.5f + 0.5f * reach)
+        // The sun itself glitters: a star of thin rays over its disc.
+        for (i in 0 until 6) streak(at, h * (if (i % 2 == 0) 0.2f else 0.12f), i * PI.toFloat() / 6 + 0.2f, Color(0xFFFFF4DA), 0.55f * day)
+        for (ghost in GHOSTS) {
+            val p = Offset(at.x + (centre.x - at.x) * ghost[0], at.y + (centre.y - at.y) * ghost[0])
+            val r = ghost[1] * h
+            val color = Color(ghost[2], ghost[3], ghost[4])
+            if (ghost[6] > 0f) hexagon(p, r, color, ghost[5] * k) else halo(p, r, color, ghost[5] * k * 1.6f)
+        }
+        if (quality == SceneQuality.Ultra) streak(at, w * 0.42f, 0f, Color(0xFFD6E6FF), 0.32f * k)
+    }
+
+    private val hex = Path()
+
+    /** A soft hexagon, the shape of the lens's iris, as one of the flare's ghosts. */
+    private fun DrawScope.hexagon(at: Offset, radius: Float, color: Color, alpha: Float) {
+        hex.reset()
+        for (i in 0 until 6) {
+            val a = i * PI.toFloat() / 3 + 0.3f
+            val x = at.x + cos(a) * radius
+            val y = at.y + sin(a) * radius
+            if (i == 0) hex.moveTo(x, y) else hex.lineTo(x, y)
+        }
+        hex.close()
+        drawPath(hex, Brush.radialGradient(listOf(color.copy(alpha = alpha * 0.5f), color.copy(alpha = alpha)), center = at, radius = radius), blendMode = BlendMode.Plus)
+    }
+
+    /** Whether the island stands between the eye and the sky in [dir]. */
+    private fun occluded(dir: FloatArray): Boolean {
+        for (step in 1..300) {
+            val d = step * 0.5f
+            if (world.solid(floor(cam[0] + dir[0] * d).toInt(), floor(cam[1] + dir[1] * d).toInt(), floor(cam[2] + dir[2] * d).toInt())) return true
+        }
+        return false
+    }
+
+    /** High and up: the picture falls off a little towards its corners, as through a real lens. */
+    private fun DrawScope.drawVignette() {
+        val w = size.width
+        val h = size.height
+        val shade = lerp(Color(0xFF0B2240), Color.Black, blend).copy(alpha = 0.12f + 0.24f * blend)
+        drawRect(
+            Brush.radialGradient(
+                0f to shade.copy(alpha = 0f),
+                0.55f to shade.copy(alpha = 0f),
+                1f to shade,
+                center = Offset(w * 0.62f, h * 0.48f),
+                radius = max(w, h) * 0.78f,
+            ),
+        )
     }
 
     /** The still water's top faces, where Ultra puts glints of the sun or the moon. */
@@ -929,10 +1109,11 @@ internal class VoxelRenderer(private val scene: Scene) {
                 }
                 Emitter.Kind.Mist -> drawRect(Color.White, Offset(at.x - s / 2, at.y - s / 2), Size(s, s), alpha = 0.35f * fade)
                 else -> {
+                    // Portal and enchanting sparks run through their colours, each on its own beat.
                     val color = when (p.kind) {
                         Emitter.Kind.Embers -> Color(1f, 0.55f + p.seed * 0.35f, 0.15f)
-                        Emitter.Kind.Portal -> Color(0.62f + p.seed * 0.2f, 0.3f, 1f)
-                        else -> Color(0.75f, 0.9f, 1f)
+                        Emitter.Kind.Portal -> Color.hsv(265f + 55f * (0.5f + 0.5f * sin(t * 1.3f + p.seed * 9f)), 0.7f, 1f)
+                        else -> Color.hsv(185f + 95f * (0.5f + 0.5f * sin(t * 1.7f + p.seed * 7f)), 0.5f, 1f)
                     }
                     drawRect(color, Offset(at.x - s / 2, at.y - s / 2), Size(s, s), alpha = fade)
                     halo(at, s * 2.5f, color, 0.3f * fade)
@@ -1009,6 +1190,9 @@ internal class VoxelRenderer(private val scene: Scene) {
     }
 
     private companion object {
+        /** How long a flight between two places takes, in seconds. */
+        const val FLIGHT = 2.4f
+
         val STRAIGHT = intArrayOf(0, 1, 2, 0, 2, 3)
         val FLIPPED = intArrayOf(1, 2, 3, 1, 3, 0)
 
@@ -1031,6 +1215,19 @@ internal class VoxelRenderer(private val scene: Scene) {
         )
         const val AURORA_COLUMNS = 120
 
+        /**
+         * The flare's ghosts: where on the line from the sun through the middle (0 at the sun, 1 in
+         * the middle), size as a share of the height, colour, strength, and whether it is a hexagon.
+         */
+        val GHOSTS = listOf(
+            floatArrayOf(0.32f, 0.05f, 1f, 0.8f, 0.45f, 0.26f, 1f),
+            floatArrayOf(0.6f, 0.024f, 0.55f, 1f, 0.6f, 0.34f, 0f),
+            floatArrayOf(0.88f, 0.085f, 0.5f, 0.7f, 1f, 0.16f, 1f),
+            floatArrayOf(1.22f, 0.036f, 1f, 0.6f, 0.8f, 0.3f, 0f),
+            floatArrayOf(1.5f, 0.12f, 0.7f, 0.58f, 1f, 0.12f, 1f),
+            floatArrayOf(1.85f, 0.06f, 1f, 0.7f, 0.45f, 0.22f, 0f),
+        )
+
         /** The cloud-shadow map: texels a side, and blocks per texel. */
         const val CLOUD_MAP = 64
         const val CLOUD_TEXEL = 2.5f
@@ -1039,6 +1236,7 @@ internal class VoxelRenderer(private val scene: Scene) {
         val AURORA_ROWS = floatArrayOf(0f, 0.12f, 0.45f, 1f)
         val AURORA_ALPHA = floatArrayOf(0f, 1f, 0.35f, 0f)
         val AURORA_TINT = floatArrayOf(0.3f, 1f, 0.6f, 0.35f, 1f, 0.62f, 0.45f, 0.55f, 1f, 0.7f, 0.35f, 1f)
+        val AURORA_SHIFT = floatArrayOf(0.25f, 0.95f, 0.85f, 0.3f, 1f, 0.9f, 0.85f, 0.45f, 1f, 1f, 0.4f, 0.8f)
     }
 }
 
@@ -1214,4 +1412,10 @@ private fun tiledNoise(x: Float, y: Float, period: Int, seed: Int): Float {
     val a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * u
     val b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * u
     return a + (b - a) * v
+}
+
+/** Eases in and out with no jolt at either end: the speed, not only the position, starts and ends at rest. */
+private fun smootherstep(edge0: Float, edge1: Float, x: Float): Float {
+    val k = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+    return k * k * k * (k * (k * 6 - 15) + 10)
 }

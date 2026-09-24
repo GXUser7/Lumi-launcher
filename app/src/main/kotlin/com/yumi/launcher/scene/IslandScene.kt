@@ -3,8 +3,10 @@ package com.yumi.launcher.scene
 import androidx.compose.ui.graphics.Color
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.pow
@@ -42,7 +44,9 @@ internal class Scene(
 /**
  * A place for the camera: it orbits [target] at [distance], [yaw] around and [pitch] up, with the
  * projection centre moved right by [offsetX] of the width so the subject sits beside the UI card.
- * [orbit] turns it slowly; otherwise it only breathes a little.
+ * [orbit] turns it slowly; otherwise it drifts a little, like a camera on a slider. A flight comes
+ * in along the place's own line of sight, from [pull] blocks behind the eye and [rise] above it —
+ * through a room's open side rather than its roof — and leaves the same way.
  */
 internal class CameraPose(
     val target: FloatArray,
@@ -52,7 +56,18 @@ internal class CameraPose(
     val fov: Float = 48f,
     val offsetX: Float = 0.2f,
     val orbit: Boolean = false,
+    val pull: Float = 6f,
+    val rise: Float = 3f,
 )
+
+/** A camera standing at [eye] and looking at [at]. */
+internal fun lookFrom(eye: FloatArray, at: FloatArray, fov: Float, pull: Float, rise: Float, offsetX: Float = 0.2f): CameraPose {
+    val dx = eye[0] - at[0]
+    val dy = eye[1] - at[1]
+    val dz = eye[2] - at[2]
+    val distance = sqrt(dx * dx + dy * dy + dz * dz)
+    return CameraPose(at, distance, yaw = atan2(dx, dz), pitch = asin(dy / distance), fov = fov, offsetX = offsetX, pull = pull, rise = rise)
+}
 
 /** One time of day: sky ramp top to horizon, light, haze, how much the clouds glow, how lit the petals are. */
 internal class Look(
@@ -65,7 +80,18 @@ internal class Look(
     val torches: Float,
 )
 
-internal class Light(val direction: FloatArray, val ambient: Float, val diffuse: Float, val tint: FloatArray = floatArrayOf(1f, 1f, 1f))
+/**
+ * Direct light from [direction] in the colour [tint], and the light of the open sky that fills the
+ * shadows, in the colour [sky]: a warm sun over cool blue shadows is most of what makes a sunny
+ * scene read as sunny rather than just bright.
+ */
+internal class Light(
+    val direction: FloatArray,
+    val ambient: Float,
+    val diffuse: Float,
+    val tint: FloatArray = floatArrayOf(1f, 1f, 1f),
+    val sky: FloatArray = tint,
+)
 internal class Fog(val color: FloatArray, val start: Float, val end: Float, val max: Float)
 internal class Petals(val count: Int, val colors: List<Color>, val size: Float, val box: FloatArray)
 
@@ -148,16 +174,24 @@ internal fun islandScene(): Scene {
         drift = drift,
         far = far,
         spots = mapOf(
-            SceneSpot.Overview to CameraPose(floatArrayOf(0f, -3f, 0f), distance = 64f, yaw = 0.6f, pitch = 0.2f, fov = 46f, offsetX = 0.2f, orbit = true),
-            SceneSpot.Forge to CameraPose(floatArrayOf(-8.5f, 4f, 6.5f), distance = 14.5f, yaw = 0.4f, pitch = 0.18f, fov = 50f, offsetX = 0.2f),
-            SceneSpot.Library to CameraPose(floatArrayOf(-9.5f, 4f, -8.5f), distance = 14f, yaw = -0.8f, pitch = 0.32f, fov = 50f, offsetX = 0.2f),
-            SceneSpot.Portal to CameraPose(floatArrayOf(9f, 6.2f, -7.5f), distance = 14f, yaw = 0.25f, pitch = 0.12f, fov = 50f, offsetX = 0.2f),
-            SceneSpot.Campfire to CameraPose(floatArrayOf(3f, 3.6f, 7.5f), distance = 11f, yaw = -0.25f, pitch = 0.26f, fov = 50f, offsetX = 0.2f),
+            SceneSpot.Overview to CameraPose(floatArrayOf(0f, -3f, 0f), distance = 64f, yaw = 0.6f, pitch = 0.2f, fov = 46f, orbit = true, pull = 0f, rise = 6f),
+            // In the smithy's open corner, looking across the room: the hearth and its lava at the
+            // back, the anvil in the middle, the furnaces on the right, the lantern hanging over it
+            // all. It comes in under the beam, past the corner post.
+            SceneSpot.Forge to lookFrom(floatArrayOf(-6.4f, G + 3.3f, 9.2f), floatArrayOf(-10f, 3.7f, 5.8f), fov = 68f, pull = 7f, rise = 1f),
+            // On the path, looking in through the library's open south side — between its corner
+            // posts, at the enchanting table and the shelves behind; it comes in craning down.
+            SceneSpot.Library to lookFrom(floatArrayOf(-9f, b.eye(-9f, -0.8f), -0.8f), floatArrayOf(-9.2f, 4.1f, -8.6f), fov = 56f, pull = 2.5f, rise = 5f),
+            // Low on the ground in front of the portal, looking up at it.
+            SceneSpot.Portal to lookFrom(floatArrayOf(9f, b.eye(9f, 1.5f) - 0.6f, 1.5f), floatArrayOf(9f, 6f, -7.5f), fov = 50f, pull = 5f, rise = 4f),
+            SceneSpot.Campfire to CameraPose(floatArrayOf(3f, 3.6f, 7.5f), distance = 11f, yaw = -0.25f, pitch = 0.26f, fov = 50f),
         ),
         // The day sky is kept a step bluer than the glass panels so a white card never sits on white.
         day = Look(
             sky = listOf(Color(0xFF3F8CEB), Color(0xFF7FBBF8), Color(0xFFC4E1FF)),
-            light = Light(SUN, ambient = 0.6f, diffuse = 0.62f, tint = floatArrayOf(1.05f, 0.99f, 0.92f)),
+            // Sunlit tops stay under full brightness, and the shadows are half as bright and bluish,
+            // so the day has depth instead of washing out.
+            light = Light(SUN, ambient = 0.46f, diffuse = 0.72f, tint = floatArrayOf(1.12f, 1f, 0.84f), sky = floatArrayOf(0.84f, 0.92f, 1.1f)),
             fog = Fog(floatArrayOf(196f, 225f, 255f), start = 40f, end = 170f, max = 0.8f),
             cloudGlow = 1f,
             petalLight = 1f,
@@ -223,6 +257,9 @@ private class Builder(val w: World, val rng: Rng) {
     fun key(x: Int, z: Int) = (x.toLong() shl 32) or (z.toLong() and 0xFFFFFFFFL)
     fun top(x: Int, z: Int) = tops[key(x, z)]
 
+    /** Where the eye of someone standing on the ground at [x], [z] would be. */
+    fun eye(x: Float, z: Float): Float = (top(floor(x).toInt(), floor(z).toInt()) ?: G) + 2.8f
+
     fun edge(x: Int, z: Int): Float {
         val angle = atan2(z.toFloat(), x.toFloat())
         return 14.8f + (valueNoise(cos(angle) * 2.2f + 9, sin(angle) * 2.2f, 8) - 0.5f) * 4.2f
@@ -263,17 +300,28 @@ private class Builder(val w: World, val rng: Rng) {
     /** Pad columns past the rim, with the level and surface [pad] wanted there; [grow] decides on them. */
     val beyond = HashMap<Long, Pair<Int, Block>>()
 
-    /** Levels a patch to [y]: its top becomes [surface], anything above goes, anything missing below is filled. */
+    /**
+     * Levels a patch to [y]: its top becomes [surface], anything above goes, anything missing below
+     * is filled. The paving frays at its edge — grass takes back some of the outer row and a few
+     * of the next — so a place does not sit on a ruled rectangle.
+     */
     fun pad(x0: Int, z0: Int, x1: Int, z1: Int, y: Int, surface: Block) {
         for (x in x0..x1) for (z in z0..z1) {
+            val ring = minOf(x - x0, x1 - x, z - z0, z1 - z)
+            val fray = when (ring) {
+                0 -> 0.5f
+                1 -> 0.15f
+                else -> 0f
+            }
+            val block = if (surface != Block.Grass && hash(x, z, 97) < fray) Block.Grass else surface
             val t = top(x, z)
             if (t == null) {
-                beyond[key(x, z)] = y to surface
+                beyond[key(x, z)] = y to block
                 continue
             }
             for (yy in y + 1..t + 1) w[x, yy, z] = null
             for (yy in y - 3 until y) if (w[x, yy, z] == null) w[x, yy, z] = Block.Dirt
-            w[x, y, z] = surface
+            w[x, y, z] = block
             tops[key(x, z)] = y
             reserved += key(x, z)
         }
@@ -441,8 +489,9 @@ private class Builder(val w: World, val rng: Rng) {
         fill(x0, G + 4, z1, x1, G + 4, z1, Block.OakLog, 1)
         fill(x0, G + 4, z0 + 1, x0, G + 4, z1 - 1, Block.OakLog, 2)
         fill(x1, G + 4, z0 + 1, x1, G + 4, z1 - 1, Block.OakLog, 2)
-        // A lantern on a chain from the ridge, over the middle of the room.
-        hang(x0 + 4, G + 3, z0 + 3)
+        // A lantern on a chain from the ridge, over the smithing table's side of the room — where
+        // it lights the tables without hanging in front of the view from the open corner.
+        hang(x0 + 2, G + 3, z0 + 3)
         reserve(x0 - 2, z0 - 2, x1 + 2, z1 + 3)
     }
 

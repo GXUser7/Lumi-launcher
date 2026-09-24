@@ -138,6 +138,8 @@ private fun launcher(args: Array<String>) = application {
                     settings.theme = theme
                     settings.account = AccountKind.Offline
                     shot("home-$suffix", 4000) { state.section = Section.Home }
+                    shot("news-hidden-$suffix", 1200) { settings.newsHidden = true }
+                    settings.newsHidden = false
                     shot("packs-$suffix", 3000) { state.section = Section.Packs }
                     shot("pack-import-$suffix", 3000) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
                     shot("pack-editor-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Edit("smoke-fabric") }

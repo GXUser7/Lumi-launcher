@@ -177,7 +177,7 @@ fun FrameWindowScope.LauncherApp(
                 enter = fadeIn(tween(300, delayMillis = 250)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it / 3 },
                 exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { it / 3 },
             ) {
-                NewsCarousel(state.news, { state.news = it })
+                NewsCarousel(state.news, { state.news = it }, hidden = settings.newsHidden, onHiddenChange = { settings.newsHidden = it })
             }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })

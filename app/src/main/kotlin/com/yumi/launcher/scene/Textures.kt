@@ -464,7 +464,8 @@ private class Painter(val px: IntArray, val stride: Int) {
         tile(Tile.PATH_TOP) { noisy(intArrayOf(rgb(0x8A6D42), rgb(0x94774A), rgb(0x9E8052), rgb(0xA8895A)), cell = 4, grain = 0.7f) }
         tile(Tile.PATH_SIDE) {
             noisy(dirt, cell = 4, grain = 0.65f)
-            for (x in 0 until 16) { this[x, 0] = CLEAR; this[x, 1] = pick(intArrayOf(rgb(0x94774A), rgb(0x9E8052))) }
+            // No see-through top row: the path is a whole cube here, so a slit would show whatever is behind it.
+            for (x in 0 until 16) { this[x, 0] = rgb(0x7E6340); this[x, 1] = pick(intArrayOf(rgb(0x94774A), rgb(0x9E8052))) }
         }
         ore(Tile.COAL_ORE, stone, intArrayOf(rgb(0x1E1E1E), rgb(0x2E2E2E), rgb(0x3A3A3A)))
         ore(Tile.IRON_ORE, stone, intArrayOf(rgb(0xD8AF93), rgb(0xC8987A), rgb(0xE8C8B0)))
@@ -542,7 +543,9 @@ private class Painter(val px: IntArray, val stride: Int) {
         tile(Tile.CAULDRON) {
             noisy(intArrayOf(rgb(0x3A3A40), rgb(0x44444A), rgb(0x4E4E54)), cell = 4, grain = 0.4f)
             for (i in 0 until 16) { this[i, 0] = rgb(0x28282C); this[0, i] = rgb(0x28282C); this[15, i] = rgb(0x28282C) }
-            rect(4, 12, 11, 15, CLEAR)
+            // The gap between the legs is shadow, not a hole: the cauldron is a whole cube to the
+            // mesher, so the wall behind it is never drawn and would show the sky through here.
+            rect(4, 12, 11, 15, rgb(0x16161A))
         }
         tile(Tile.LECTERN) {
             planks(oakPlank, rgb(0x6F5530))

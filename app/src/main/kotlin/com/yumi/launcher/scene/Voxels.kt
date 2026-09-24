@@ -177,6 +177,12 @@ internal enum class Block(
 
     /** Lets light through, however dimmed. */
     val clear: Boolean get() = !solid || anim == Anim.Leaves
+
+    /**
+     * Hides a glow or a spark behind it. A roof of stairs lets light and shadow rays slip through
+     * the gaps a half block leaves, but nobody should see a lantern's halo through it.
+     */
+    val screens: Boolean get() = solid || shape == Shape.Stairs || shape == Shape.Slab
 }
 
 // ---------- world ----------
@@ -792,7 +798,7 @@ internal fun World.blocked(ox: Float, oy: Float, oz: Float, dir: FloatArray, max
     return false
 }
 
-/** Whether the straight line from the eye to a point crosses a solid block — for glows and particles. */
+/** Whether the straight line from the eye to a point crosses a block that [screens][Block.screens] it — for glows and particles. */
 internal fun World.hidden(ex: Float, ey: Float, ez: Float, px: Float, py: Float, pz: Float): Boolean {
     val dx = px - ex
     val dy = py - ey
@@ -821,7 +827,7 @@ internal fun World.hidden(ex: Float, ey: Float, ez: Float, px: Float, py: Float,
         else if (maxY < maxZ) { y += stepY; travelled = maxY; maxY += deltaY }
         else { z += stepZ; travelled = maxZ; maxZ += deltaZ }
         if (!inside(x, y, z)) return false
-        if (travelled < length - 0.5f && solid(x, y, z)) return true
+        if (travelled < length - 0.5f && this[x, y, z]?.screens == true) return true
     }
     return false
 }
