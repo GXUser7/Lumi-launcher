@@ -151,6 +151,21 @@ internal object Modrinth : ModCatalog {
         return LauncherJson.parseToJsonElement(text).jsonObject.mapValues { it.value.jsonObject.str("id")!! }
     }
 
+    /** Download links for the files Modrinth hosts byte for byte, by SHA-1; the rest are left out. */
+    suspend fun urlsByHash(sha1s: Collection<String>): Map<String, String> {
+        if (sha1s.isEmpty()) return emptyMap()
+        val body = buildJsonObject {
+            put("hashes", JsonArray(sha1s.map { JsonPrimitive(it) }))
+            put("algorithm", JsonPrimitive("sha1"))
+        }
+        val (status, text) = Http.post("$API/version_files", body.toString())
+        if (status != 200) return emptyMap()
+        return LauncherJson.parseToJsonElement(text).jsonObject.mapNotNull { (hash, version) ->
+            version.jsonObject["files"]?.jsonArray.orEmpty().map { it.jsonObject }
+                .firstOrNull { it.obj("hashes")?.str("sha1") == hash }?.str("url")?.let { hash to it }
+        }.toMap()
+    }
+
     /** Versions by id, a hundred to a request. */
     suspend fun versions(ids: List<String>): List<JsonObject> = ids.chunked(100).flatMap { chunk ->
         val list = chunk.joinToString(",", "[", "]") { "\"$it\"" }
@@ -249,11 +264,11 @@ internal class CurseForge(private val key: String) : ModCatalog {
         )
     }
 
-    private suspend fun data(url: String) = LauncherJson.parseToJsonElement(Http.text(url, headers)).jsonObject["data"]!!
+    private suspend fun data(url: String) = get(url, key)["data"]!!
 
     private suspend fun postData(url: String, body: String): JsonElement {
         val (status, text) = Http.post(url, body, headers)
-        if (status == 401 || status == 403) throw IOException("CurseForge не принял ключ — проверьте его в настройках")
+        if (status == 401 || status == 403) throw IOException(refused(key))
         if (status != 200) throw IOException("CurseForge ответил HTTP $status")
         return LauncherJson.parseToJsonElement(text).jsonObject["data"]!!
     }
@@ -299,10 +314,36 @@ internal class CurseForge(private val key: String) : ModCatalog {
         pageUrl = o.obj("links")?.str("websiteUrl") ?: "https://www.curseforge.com/minecraft/mc-mods/${o.str("slug")}",
     )
 
-    private companion object {
-        const val API = "https://api.curseforge.com/v1"
-        const val MINECRAFT = 432
-        const val MODS = 6
+    companion object {
+        private const val API = "https://api.curseforge.com/v1"
+        private const val MINECRAFT = 432
+        private const val MODS = 6
+
+        /** Upload tokens and project ids look like this; people paste them where the API key goes. */
+        private val GUID = Regex("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")
+
+        /**
+         * A GET to CurseForge's API with the player's key. CurseForge answers a bad key with a bare
+         * 403; the player is told it is the key, and what a right one looks like.
+         */
+        suspend fun get(url: String, key: String): JsonObject = try {
+            LauncherJson.parseToJsonElement(Http.text(url, mapOf("x-api-key" to key, "Accept" to "application/json"))).jsonObject
+        } catch (e: HttpRefused) {
+            throw if (e.status == 401 || e.status == 403) IOException(refused(key), e) else e
+        }
+
+        /** Null when CurseForge takes [key], else why not; throws when CurseForge cannot be reached. */
+        suspend fun refusal(key: String): String? = try {
+            Http.text("$API/games/$MINECRAFT", mapOf("x-api-key" to key, "Accept" to "application/json"))
+            null
+        } catch (e: HttpRefused) {
+            if (e.status == 401 || e.status == 403) refused(key) else "CurseForge ответил ${e.status}"
+        }
+
+        fun refused(key: String): String = when {
+            GUID.matches(key.trim()) -> "Это не ключ API — похоже на токен загрузки или ID. Нужен ключ из console.curseforge.com → API keys, он начинается с \$2a\$10\$"
+            else -> "CurseForge не принял ключ — проверьте его в «Настройках». Ключ API начинается с \$2a\$10\$"
+        }
     }
 }
 

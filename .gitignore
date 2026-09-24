@@ -5,3 +5,6 @@ build/
 *.iml
 local.properties
 .local/
+
+# A personal API key someone keeps next to the code; never to be committed.
+Key.txt

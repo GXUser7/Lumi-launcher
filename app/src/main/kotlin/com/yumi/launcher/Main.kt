@@ -83,14 +83,16 @@ private fun menuPacks(args: List<String>): Int {
 
 private fun packTest(args: List<String>): Int = runBlocking {
     if (args.size < 2) {
-        println("Использование: --pack-test <архив.mrpack|архив.zip> <тестовая папка> [ключ CurseForge]")
+        println("Использование: --pack-test <архив.mrpack|архив.zip> <тестовая папка> [ключ CurseForge — по умолчанию из настроек]")
         return@runBlocking 2
     }
     try {
         val archive = File(args[0])
         val folder = File(args[1])
         val info = PackArchives.inspect(archive)
-        PackArchives.install(archive, folder, args.getOrNull(2).orEmpty()) {}
+        // The key from the launcher's settings unless one is given, so it need not show in the command line.
+        val key = args.getOrNull(2) ?: LauncherSettings().curseForgeKey.trim()
+        PackArchives.install(archive, folder, key) {}
         ServerMods.sync(folder.resolve("minecraft/mods"), folder.resolve("hosted/mods"), emptySet(), folder.resolve("server"))
         println("${info.name}: ${info.loader.label} ${info.version}, клиент=${folder.resolve("minecraft").walkTopDown().count { it.isFile }}, сервер=${folder.resolve("hosted").walkTopDown().count { it.isFile }}")
         0
@@ -212,7 +214,15 @@ private fun launcher(args: Array<String>) = application {
                     shot("mods-$suffix", 5000) { state.section = Section.Mods }
                     shot("settings-$suffix", 3000) { state.section = Section.Settings }
                     // The game group — memory, Java, shared game settings — is at the bottom.
+                    // The island's group, down to "Во время игры".
+                    shot("settings-scene-$suffix", 1200) { wheel(270, 500, 6) }
                     shot("settings-game-$suffix", 1200) { wheel(270, 500, 80) }
+                    // A pasted upload token where the API key goes: CurseForge refuses it, and the field says why.
+                    shot("settings-key-$suffix", 4000) {
+                        settings.curseForgeKey = "00000000-0000-0000-0000-000000000000"
+                        wheel(270, 500, -4)
+                    }
+                    settings.curseForgeKey = ""
                     shot("servers-$suffix", 3000) {
                         state.section = Section.Servers
                         state.serversTab = ServersTab.Hosted

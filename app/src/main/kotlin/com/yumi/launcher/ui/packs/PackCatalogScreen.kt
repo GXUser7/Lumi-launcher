@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Inventory2
-import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Star
@@ -80,7 +79,7 @@ import com.yumi.launcher.core.PackHit
 import com.yumi.launcher.core.PackRelease
 import com.yumi.launcher.core.ReleaseType
 import com.yumi.launcher.data.LauncherModel
-import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.CurseForgeKeyPrompt
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.Label
@@ -177,7 +176,7 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
             }
             error?.let { ErrorLine(it) { query = query.trim() + " " } }
             when {
-                source == ModSource.CurseForge && key.isBlank() -> CurseForgeKey(model)
+                source == ModSource.CurseForge && key.isBlank() -> CurseForgeKeyPrompt { model.settings.curseForgeKey = it }
                 hits.isEmpty() && !searching && error == null -> NothingFound(version, loader)
                 else -> LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(hits, key = { it.id }) { hit -> HitCard(hit) { chosen = hit } }
@@ -291,25 +290,6 @@ private fun NothingFound(version: String?, loader: Loader?) {
         ShapeTile(Icons.Rounded.SearchOff, scheme.secondaryContainer, scheme.onSecondaryContainer, 64.dp)
         Text("Ничего не нашлось", style = MaterialTheme.typography.titleMedium)
         Hint(if (version != null || loader != null) "Попробуйте другую версию или любой загрузчик." else "Попробуйте другое название.")
-    }
-}
-
-/** Where to put a CurseForge key, right where it is missed. */
-@Composable
-private fun CurseForgeKey(model: LauncherModel) {
-    var key by remember { mutableStateOf("") }
-    val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(26.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ShapeTile(Icons.Rounded.Key, scheme.secondaryContainer, scheme.onSecondaryContainer, 40.dp)
-                Spacer(Modifier.width(12.dp))
-                Text("Нужен ключ CurseForge", style = MaterialTheme.typography.titleLarge)
-            }
-            Hint("CurseForge пускает лаунчеры только с личным ключом. Он бесплатный: войдите на console.curseforge.com, раздел API Keys, скопируйте ключ и вставьте сюда. Modrinth работает без ключа.")
-            Field(key, { key = it.trim() }, label = "Ключ API", icon = Icons.Rounded.Key, modifier = Modifier.fillMaxWidth())
-            Button(onClick = { model.settings.curseForgeKey = key }, enabled = key.length > 20, shapes = ButtonDefaults.shapes()) { Text("Сохранить ключ") }
-        }
     }
 }
 

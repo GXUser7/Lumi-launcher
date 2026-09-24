@@ -74,7 +74,7 @@ internal object PackCatalog {
                 (if (version.isBlank()) "" else "&gameVersion=${enc(version)}") +
                 (if (loader == null || loader == Loader.Vanilla) "" else "&modLoaderType=${curseLoader(loader)}") +
                 "&sortField=6&sortOrder=desc&pageSize=30"
-            LauncherJson.parseToJsonElement(Http.text(url, headers(key))).jsonObject["data"]!!.jsonArray.map { element ->
+            CurseForge.get(url, key)["data"]!!.jsonArray.map { element ->
                 val o = element.jsonObject
                 val latest = o["latestFilesIndexes"]?.jsonArray.orEmpty().map { it.jsonObject }
                 PackHit(
@@ -122,7 +122,7 @@ internal object PackCatalog {
         ModSource.CurseForge -> {
             require(key.isNotBlank()) { "Добавьте ключ CurseForge в настройках" }
             val url = "https://api.curseforge.com/v1/mods/$projectId/files?pageSize=50"
-            LauncherJson.parseToJsonElement(Http.text(url, headers(key))).jsonObject["data"]!!.jsonArray
+            CurseForge.get(url, key)["data"]!!.jsonArray
                 .map { it.jsonObject }
                 // A pack's server archive is a file of its own; it is offered with its client release instead.
                 .filterNot { it.bool("isServerPack") }
@@ -131,8 +131,7 @@ internal object PackCatalog {
     }
 
     suspend fun serverRelease(projectId: String, fileId: Long, key: String): PackRelease {
-        val o = LauncherJson.parseToJsonElement(Http.text("https://api.curseforge.com/v1/mods/$projectId/files/$fileId", headers(key)))
-            .jsonObject["data"]!!.jsonObject
+        val o = CurseForge.get("https://api.curseforge.com/v1/mods/$projectId/files/$fileId", key)["data"]!!.jsonObject
         return curseRelease(o) ?: error("Автор запретил скачивание серверного архива")
     }
 
@@ -191,6 +190,5 @@ internal object PackCatalog {
         else -> null
     }
 
-    private fun headers(key: String) = mapOf("x-api-key" to key, "Accept" to "application/json")
     private fun enc(value: String) = URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 }

@@ -29,7 +29,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.Coffee
-import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,8 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.LauncherPaths
@@ -59,6 +56,7 @@ import com.yumi.launcher.settings.SceneMotion
 import com.yumi.launcher.settings.SceneQuality
 import com.yumi.launcher.settings.ThemeMode
 import com.yumi.launcher.ui.components.ChoiceGroup
+import com.yumi.launcher.ui.components.CurseForgeKeyField
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Label
 import com.yumi.launcher.ui.components.LocalFieldContainer
@@ -117,6 +115,12 @@ fun SettingsScreen(model: LauncherModel) {
                 SceneMotion.Both -> "Остров поворачивается и немного отзывается на курсор."
             },
         )
+        Label("Во время игры")
+        Choice(listOf(true, false), settings.scenePausedInGame, { if (it) "Останавливать" else "Не останавливать" }, { settings.scenePausedInGame = it })
+        Hint(
+            if (settings.scenePausedInGame) "Пока идёт Minecraft, остров замирает и не отнимает у игры видеокарту."
+            else "Остров живёт и во время игры. На слабом компьютере игра может потерять несколько кадров.",
+        )
 
         Group("Игра")
         Label("Память")
@@ -145,15 +149,13 @@ fun SettingsScreen(model: LauncherModel) {
         GameFolder(model)
 
         Label("Ключ CurseForge")
-        Field(
+        CurseForgeKeyField(
             value = settings.curseForgeKey,
             onValueChange = { settings.curseForgeKey = it.trim() },
             placeholder = "Не задан — моды только с Modrinth",
-            icon = Icons.Rounded.Key,
-            visualTransformation = if (settings.curseForgeKey.isEmpty()) VisualTransformation.None else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
         )
-        Hint("Бесплатный личный ключ: console.curseforge.com → API Keys. Modrinth работает без ключа.")
+        Hint("Бесплатный личный ключ: console.curseforge.com → API Keys, начинается с \$2a\$10\$. Modrinth работает без ключа.")
 
         Label("Настройки Minecraft")
         Choice(listOf(true, false), settings.syncOptions, { if (it) "Общие для сборок" else "У каждой свои" }, { settings.syncOptions = it })
@@ -169,7 +171,7 @@ fun SettingsScreen(model: LauncherModel) {
         Choice(AfterLaunch.entries, settings.afterLaunch, { it.label }, { settings.afterLaunch = it })
         Hint(
             when (settings.afterLaunch) {
-                AfterLaunch.Keep -> "Лаунчер останется открытым, а остров замрёт, чтобы не отнимать ресурсы у игры."
+                AfterLaunch.Keep -> if (settings.scenePausedInGame) "Лаунчер останется открытым, а остров замрёт, чтобы не отнимать ресурсы у игры." else "Лаунчер останется открытым, остров — живым."
                 AfterLaunch.Minimize -> "Лаунчер свернётся и развернётся обратно, когда вы выйдете из игры."
                 AfterLaunch.Close -> "Лаунчер закроется, игра продолжит работать."
             },

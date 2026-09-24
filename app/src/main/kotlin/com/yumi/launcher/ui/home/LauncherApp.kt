@@ -154,7 +154,8 @@ fun FrameWindowScope.LauncherApp(
         // Nothing here sits on a Surface, so the content colour has to be set once for the window —
         // left alone it stays Material's default black, which the dark theme cannot survive.
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-            // The island holds still while the game runs: it would only be competing for the GPU.
+            // Unless the player wants it alive, the island holds still while the game runs: it would only
+            // be competing for the GPU. Minimised, nothing of it is seen, so it always stops.
             // Each section has its place on the island, and the camera flies there when it opens.
             VoxelBackground(
                 parallax,
@@ -162,7 +163,7 @@ fun FrameWindowScope.LauncherApp(
                 options = SceneOptions(settings.sceneQuality, settings.sceneMotion, settings.sceneFps),
                 spot = state.section.spot,
                 modifier = Modifier.fillMaxSize(),
-                running = !windowState.isMinimized && model.status !is PlayStatus.Running,
+                running = !windowState.isMinimized && !(settings.scenePausedInGame && model.status is PlayStatus.Running),
             )
             // Underneath the bar, so the pills keep their clicks and the gaps between them drag the window.
             WindowDraggableArea(Modifier.fillMaxWidth().height(88.dp)) { Box(Modifier.fillMaxSize()) }

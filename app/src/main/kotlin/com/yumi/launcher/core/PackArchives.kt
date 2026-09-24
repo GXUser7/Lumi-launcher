@@ -69,9 +69,13 @@ internal object PackArchives {
     }
 
     private fun curseForgeInfo(index: JsonObject): PackInfo {
-        require(index.str("manifestType") == "minecraft" && index.long("manifestVersion") == 1L) { "Неподдерживаемый формат CurseForge" }
+        // CurseForge writes "minecraftModpack"; a bare "minecraft" is accepted from older tools.
+        require(index.str("manifestType") in setOf("minecraftModpack", "minecraft") && index.long("manifestVersion") == 1L) {
+            "Неподдерживаемый формат CurseForge"
+        }
         val minecraft = index.obj("minecraft") ?: error("В сборке нет версии Minecraft")
-        val loaderId = minecraft["modLoaders"]?.jsonArray?.firstOrNull()?.jsonObject?.str("id")
+        val loaders = minecraft["modLoaders"]?.jsonArray.orEmpty().map { it.jsonObject }
+        val loaderId = (loaders.firstOrNull { it.bool("primary") } ?: loaders.firstOrNull())?.str("id")
         val loader = when (loaderId?.substringBefore('-')) {
             "fabric" -> Loader.Fabric
             "quilt" -> Loader.Quilt
@@ -109,19 +113,41 @@ internal object PackArchives {
 
     private suspend fun curseForgeFiles(index: JsonObject, game: File, key: String): List<Download> {
         curseForgeInfo(index)
-        require(key.isNotBlank() || index["files"]?.jsonArray.isNullOrEmpty()) { "Для сборки CurseForge нужен ключ API в настройках" }
-        val headers = mapOf("x-api-key" to key, "Accept" to "application/json")
-        return index["files"]?.jsonArray.orEmpty().map { element ->
-            val ref = element.jsonObject
-            val project = ref.long("projectID") ?: error("Нет ID проекта CurseForge")
-            val fileId = ref.long("fileID") ?: error("Нет ID файла CurseForge")
-            val record = LauncherJson.parseToJsonElement(Http.text("https://api.curseforge.com/v1/mods/$project/files/$fileId", headers))
-                .jsonObject["data"]!!.jsonObject
+        val refs = index["files"]?.jsonArray.orEmpty().map { it.jsonObject }
+        if (refs.isEmpty()) return emptyList()
+        require(key.isNotBlank()) { "Для сборки CurseForge нужен ключ API в настройках" }
+        val ids = refs.map { it.long("fileID") ?: error("Нет ID файла CurseForge") }
+        val curse = CurseForge(key)
+        // All files in a few requests rather than one each: a big pack lists hundreds.
+        val records = curse.files(ids)
+        val lost = ids.toSet() - records.mapNotNull { it.long("id") }.toSet()
+        if (lost.isNotEmpty()) error("CurseForge не нашёл файлы сборки: ${lost.joinToString()}")
+        // Packs carry resource packs and shaders too; each goes to its own folder, not into mods.
+        val classes = curse.mods(records.mapNotNull { it.long("modId") }).associate { it.long("id") to it.long("classId") }
+        val sha1 = { record: JsonObject ->
+            record["hashes"]?.jsonArray.orEmpty().map { it.jsonObject }.firstOrNull { it.long("algo") == 1L }?.str("value")
+        }
+        // Some authors allow downloads only on CurseForge's own site. Modrinth often hosts the very
+        // same file — same SHA-1 — and lets launchers have it.
+        val blocked = records.filter { it.str("downloadUrl") == null }
+        val mirrors = Modrinth.urlsByHash(blocked.mapNotNull(sha1))
+        val stuck = blocked.filter { record -> sha1(record)?.let(mirrors::get) == null }
+        if (stuck.isNotEmpty()) {
+            val names = stuck.joinToString { "«${it.str("displayName") ?: it.str("fileName")}»" }
+            throw IOException("Сборку не поставить: $names автор разрешил скачивать только на сайте CurseForge, а на Modrinth такого файла нет")
+        }
+        return records.map { record ->
             val name = safePath(record.str("fileName") ?: error("Файл CurseForge без имени"))
             require('/' !in name) { "Недопустимое имя файла $name" }
-            val url = record.str("downloadUrl") ?: error("Автор запретил скачивание $name через лаунчер")
-            val hash = record["hashes"]?.jsonArray.orEmpty().map { it.jsonObject }.firstOrNull { it.long("algo") == 1L }?.str("value")
-            Download(url, game.resolve("mods").resolve(name), hash, record.long("fileLength"))
+            val folder = when (classes[record.long("modId")]) {
+                12L -> "resourcepacks"
+                6552L -> "shaderpacks"
+                else -> "mods"
+            }
+            val hash = sha1(record)
+            // CurseForge's links keep the file name as it is, spaces included.
+            val url = record.str("downloadUrl")?.replace(" ", "%20") ?: mirrors.getValue(hash!!)
+            Download(url, game.resolve(folder).resolve(name), hash, record.long("fileLength"))
         }
     }
 

@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Gavel
-import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.UnfoldMore
@@ -77,7 +76,7 @@ import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ModEntry
-import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.CurseForgeKeyPrompt
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.RemoteIcon
@@ -226,7 +225,7 @@ private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListSta
         }
     }
     if (mods.source == ModSource.CurseForge && settings.curseForgeKey.isBlank()) {
-        CurseForgeKey(model, pack)
+        CurseForgeKeyPrompt { key -> model.settings.curseForgeKey = key; model.mods.search(pack) }
         return
     }
     mods.searchError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.error) }
@@ -454,30 +453,6 @@ private fun InstalledRow(entry: ModEntry, onToggle: (Boolean) -> Unit, onDelete:
             }
             Switch(checked = entry.enabled, onCheckedChange = onToggle)
             IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Удалить «${entry.title}»", tint = scheme.onSurfaceVariant) }
-        }
-    }
-}
-
-/** Where to put a CurseForge key, right where it is missed. */
-@Composable
-private fun CurseForgeKey(model: LauncherModel, pack: Instance) {
-    var key by remember { mutableStateOf("") }
-    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Нужен ключ CurseForge", style = MaterialTheme.typography.titleLarge)
-            Hint("CurseForge пускает лаунчеры только с личным ключом. Он бесплатный: войдите на console.curseforge.com, раздел API Keys, скопируйте ключ и вставьте сюда. Modrinth работает без ключа.")
-            Field(
-                value = key,
-                onValueChange = { key = it.trim() },
-                label = "Ключ API",
-                icon = Icons.Rounded.Key,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(
-                onClick = { model.settings.curseForgeKey = key; model.mods.search(pack) },
-                enabled = key.length > 20,
-                shapes = ButtonDefaults.shapes(),
-            ) { Text("Сохранить ключ") }
         }
     }
 }

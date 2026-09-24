@@ -80,6 +80,9 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
     var sceneMotion by stored("sceneMotion", SceneMotion.Both, { runCatching { SceneMotion.valueOf(it) }.getOrNull() }, { it.name })
     var sceneFps by stored("sceneFps", 60, String::toIntOrNull, Int::toString)
 
+    /** The island holds still while the game runs, leaving the GPU to it; off, it keeps moving. */
+    var scenePausedInGame by stored("scenePausedInGame", true, { it == "true" }, { it.toString() })
+
     /** The home screen's news, folded down to their header so the island has the corner. */
     var newsHidden by stored("newsHidden", false, { it == "true" }, { it.toString() })
 
