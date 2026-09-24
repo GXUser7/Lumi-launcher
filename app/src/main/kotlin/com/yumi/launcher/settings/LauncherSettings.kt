@@ -25,10 +25,15 @@ enum class Palette(val label: String) { Original("Оригинал"), Green("З�
 enum class AccountKind(val label: String) { Microsoft("Microsoft"), Offline("Офлайн"), ElyBy("Ely.by") }
 
 /**
- * How much the island draws. Low is flat shading; High adds Minecraft-style smooth lighting and
- * shadows cast by the sun or moon; Ultra adds light shafts, horizon haze and moving water.
+ * How much the island draws. Low is flat colour with plain light; Medium adds the block textures,
+ * smooth light from the sky and from torches, and moving water and lava; High adds sun and moon
+ * shadows, halos and lens stars over the lights, the sun's lens flare, a vignette, smoke, sparks
+ * and fireflies, and islands far out in the haze;
+ * Ultra adds light shafts, the aurora, swaying leaves and grass, glints on the water, shadows of
+ * passing clouds, birds, and the rest of the particles.
+ * Stored by name, so the order here is only the order of the buttons.
  */
-enum class SceneQuality(val label: String) { Low("Низкое"), High("Высокое"), Ultra("Ультра") }
+enum class SceneQuality(val label: String) { Low("Низкое"), Medium("Среднее"), High("Высокое"), Ultra("Ультра") }
 
 /** What moves the camera: a slow turn, the pointer, or both. */
 enum class SceneMotion(val label: String) { Rotate("Вращение"), Mouse("За мышью"), Both("Вместе") }
@@ -57,6 +62,9 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
     var sceneQuality by stored("sceneQuality", SceneQuality.Ultra, { runCatching { SceneQuality.valueOf(it) }.getOrNull() }, { it.name })
     var sceneMotion by stored("sceneMotion", SceneMotion.Both, { runCatching { SceneMotion.valueOf(it) }.getOrNull() }, { it.name })
     var sceneFps by stored("sceneFps", 60, String::toIntOrNull, Int::toString)
+
+    /** The home screen's news, folded down to their header so the island has the corner. */
+    var newsHidden by stored("newsHidden", false, { it == "true" }, { it.toString() })
 
     /** A personal CurseForge API key; without one only Modrinth is searched. */
     var curseForgeKey by stored("curseForgeKey", "", { it }, { it })

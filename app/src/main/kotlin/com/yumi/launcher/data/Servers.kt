@@ -20,6 +20,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -68,6 +72,10 @@ data class BannedPlayer(
     val name: String,
     val reason: String = "",
     val expires: String = "forever",
+    /** "2026-09-23 23:10:46 +0500", as the server writes it. */
+    val created: String = "",
+    /** Who banned: a player's name, or "Server" for the console. */
+    val source: String = "",
 )
 
 sealed interface ServerStatus {
@@ -88,6 +96,9 @@ class ServerSession {
         internal set
     val lines = mutableStateListOf<String>()
     val players = mutableStateListOf<String>()
+
+    /** A command half-typed in the terminal; kept with the output, so a trip elsewhere does not lose it. */
+    var draft by mutableStateOf("")
     internal val history = mutableListOf<String>()
     internal var process: Process? = null
     internal var job: Job? = null
@@ -166,8 +177,30 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
     fun port(profile: ServerProfile): Int = properties(profile).int("server-port", 25565)
 
     fun bannedPlayers(profile: ServerProfile): List<BannedPlayer> {
-        val file = folder(profile).resolve("banned-players.json")
+        val file = bansFile(profile)
         return if (file.isFile) LauncherJson.decodeFromString(file.readText()) else emptyList()
+    }
+
+    fun bansFile(profile: ServerProfile): File = folder(profile).resolve("banned-players.json")
+
+    /**
+     * Lifts a ban. A running server keeps its list in memory and writes it back over the file, so it
+     * is told with `pardon`; a stopped one has the entry taken out of the file. While it is starting
+     * or stopping neither is safe, and nothing is done.
+     */
+    fun pardon(profile: ServerProfile, name: String) {
+        val session = session(profile.id)
+        when {
+            session.status is ServerStatus.Running -> send(profile.id, "pardon $name")
+            session.status.active -> Unit
+            else -> {
+                val file = bansFile(profile)
+                if (!file.isFile) return
+                val kept = LauncherJson.parseToJsonElement(file.readText()).jsonArray
+                    .filterNot { it.jsonObject["name"]?.jsonPrimitive?.content.equals(name, ignoreCase = true) }
+                file.writeText(LauncherJson.encodeToString(JsonArray.serializer(), JsonArray(kept)))
+            }
+        }
     }
 
     fun session(id: String): ServerSession = synchronized(sessions) { sessions.getOrPut(id) { ServerSession() } }

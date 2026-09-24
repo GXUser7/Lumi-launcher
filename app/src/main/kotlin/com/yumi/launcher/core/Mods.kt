@@ -37,6 +37,18 @@ data class ModFile(
     val requires: List<String>,
 )
 
+/** What a mod's own page says beyond the search result: the long description, pictures, tags. */
+data class ModDetails(
+    val body: String,
+    val gallery: List<String>,
+    val categories: List<String>,
+    val updated: String,
+    /** Where the mod is needed — "required", "optional" or "unsupported"; null when the catalogue does not say. */
+    val client: String?,
+    val server: String?,
+    val license: String?,
+)
+
 internal interface ModCatalog {
     suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int): List<ModHit>
 
@@ -45,6 +57,9 @@ internal interface ModCatalog {
 
     /** Title and icon of a project, for dependencies pulled in by id. */
     suspend fun describe(projectId: String): ModHit
+
+    /** The project's page: description, gallery, categories. */
+    suspend fun details(projectId: String): ModDetails
 }
 
 /** Modrinth's public API: no key, only a User-Agent that says who is asking. */
@@ -87,6 +102,19 @@ internal object Modrinth : ModCatalog {
 
     override suspend fun describe(projectId: String): ModHit =
         hit(LauncherJson.parseToJsonElement(Http.text("$API/project/${encode(projectId)}")).jsonObject, idKey = "id")
+
+    override suspend fun details(projectId: String): ModDetails {
+        val o = LauncherJson.parseToJsonElement(Http.text("$API/project/${encode(projectId)}")).jsonObject
+        return ModDetails(
+            body = plainText(o.str("body").orEmpty()),
+            gallery = o["gallery"]?.jsonArray.orEmpty().map { it.jsonObject }.sortedByDescending { it.bool("featured") }.mapNotNull { it.str("url") },
+            categories = o["categories"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content },
+            updated = o.str("updated")?.take(10).orEmpty(),
+            client = o.str("client_side"),
+            server = o.str("server_side"),
+            license = o.obj("license")?.str("id")?.takeIf { it.isNotBlank() && !it.startsWith("LicenseRef") },
+        )
+    }
 
     /**
      * Whether each file is wanted on a server — `required`, `optional` or `unsupported` — keyed by
@@ -160,6 +188,20 @@ internal class CurseForge(private val key: String) : ModCatalog {
 
     override suspend fun describe(projectId: String): ModHit = hit(data("$API/mods/$projectId").jsonObject)
 
+    override suspend fun details(projectId: String): ModDetails {
+        val o = data("$API/mods/$projectId").jsonObject
+        val html = runCatching { data("$API/mods/$projectId/description").jsonPrimitive.content }.getOrDefault("")
+        return ModDetails(
+            body = plainText(html),
+            gallery = o["screenshots"]?.jsonArray.orEmpty().mapNotNull { it.jsonObject.str("url") ?: it.jsonObject.str("thumbnailUrl") },
+            categories = o["categories"]?.jsonArray.orEmpty().mapNotNull { it.jsonObject.str("name") },
+            updated = o.str("dateModified")?.take(10).orEmpty(),
+            client = null,
+            server = null,
+            license = null,
+        )
+    }
+
     private suspend fun data(url: String) = LauncherJson.parseToJsonElement(Http.text(url, headers)).jsonObject["data"]!!
 
     private fun hit(o: JsonObject) = ModHit(
@@ -181,3 +223,26 @@ internal class CurseForge(private val key: String) : ModCatalog {
 }
 
 private fun encode(value: String) = URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
+
+/**
+ * A project description — Modrinth's Markdown or CurseForge's HTML — as plain paragraphs: pictures
+ * and markup dropped, links reduced to their text, lists to bullets. Enough to read in the launcher;
+ * the page itself is one click away for the rest.
+ */
+internal fun plainText(source: String): String = source
+    .replace(Regex("(?is)<(script|style)[^>]*>.*?</\\1>"), "")
+    .replace(Regex("(?i)<br\\s*/?>|</p>|</h\\d>|</div>|</li>"), "\n")
+    .replace(Regex("(?i)<li[^>]*>"), "• ")
+    .replace(Regex("<[^>]+>"), "")
+    .replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "")
+    .replace(Regex("\\[([^\\]]*)]\\([^)]*\\)"), "$1")
+    .replace(Regex("(?m)^#{1,6}\\s*"), "")
+    .replace(Regex("(?m)^\\s*[-*+]\\s+"), "• ")
+    .replace(Regex("(\\*\\*|__)(.+?)\\1"), "$2")
+    .replace(Regex("(?<=^|\\s)[*_]([^*_\\n]+?)[*_](?=\\s|$|[.,!?:;)])", RegexOption.MULTILINE), "$1")
+    .replace(Regex("(?m)^\\s*([-*_])\\1{2,}\\s*$"), "")
+    .replace(Regex("`{1,3}"), "")
+    .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
+    .lines().joinToString("\n") { it.trimEnd() }
+    .replace(Regex("\n{3,}"), "\n\n")
+    .trim()

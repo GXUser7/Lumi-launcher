@@ -1,6 +1,9 @@
 package com.yumi.launcher.ui.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -99,12 +102,12 @@ fun FrameWindowScope.LauncherApp(
     dark: Boolean,
     onClose: () -> Unit,
     closeRequests: Int = 0,
-    /** Hands the navigation state out once — for the smoke run, which drives it screen by screen. */
-    onState: (LauncherState) -> Unit = {},
+    /** Hands the navigation state and the model out once — for the smoke run, which drives them screen by screen. */
+    onState: (LauncherState, LauncherModel) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
     val model = remember { LauncherModel(settings, scope) }
-    val state = remember { LauncherState().also(onState) }
+    val state = remember { LauncherState().also { onState(it, model) } }
     val parallax = remember { Parallax() }
 
     // A running server has no window of its own: closing the launcher asks first, then stops it properly.
@@ -151,10 +154,12 @@ fun FrameWindowScope.LauncherApp(
         // left alone it stays Material's default black, which the dark theme cannot survive.
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             // The island holds still while the game runs: it would only be competing for the GPU.
+            // Each section has its place on the island, and the camera flies there when it opens.
             VoxelBackground(
                 parallax,
                 night = dark,
                 options = SceneOptions(settings.sceneQuality, settings.sceneMotion, settings.sceneFps),
+                spot = state.section.spot,
                 modifier = Modifier.fillMaxSize(),
                 running = !windowState.isMinimized && model.status !is PlayStatus.Running,
             )
@@ -164,7 +169,16 @@ fun FrameWindowScope.LauncherApp(
                 TopBar(model, state, windowState, requestClose)
             }
             ScreenCard(model, state, play, Modifier.padding(start = 16.dp, top = 88.dp, bottom = 16.dp))
-            NewsCarousel(state.news, { state.news = it }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+            // Only the home screen has news; elsewhere the corner belongs to the island, where the
+            // camera has flown to that section's place.
+            AnimatedVisibility(
+                state.section == Section.Home,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                enter = fadeIn(tween(300, delayMillis = 250)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it / 3 },
+                exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { it / 3 },
+            ) {
+                NewsCarousel(state.news, { state.news = it }, hidden = settings.newsHidden, onHiddenChange = { settings.newsHidden = it })
+            }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
@@ -244,7 +258,7 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
 private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instance?, String?) -> Unit, modifier: Modifier) {
     val target = when (state.section) {
         Section.Home -> 440.dp
-        Section.Mods, Section.Servers -> 620.dp
+        Section.Mods, Section.Packs, Section.Servers -> 620.dp
         else -> 520.dp
     }
     val width by animateDpAsState(target, spring(dampingRatio = 0.8f, stiffness = 380f))

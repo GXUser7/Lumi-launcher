@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Http
 import com.yumi.launcher.core.LauncherPaths
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,17 @@ fun RemoteIcon(url: String?, fallback: ImageVector, size: Dp, modifier: Modifier
         val bitmap = image
         if (bitmap != null) Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Icon(fallback, null, Modifier.size(size * 0.5f), tint = scheme.onSurfaceVariant)
+    }
+}
+
+/** A picture from the web — a screenshot in a mod's gallery — cropped to fill [modifier]'s size. */
+@Composable
+fun RemoteImage(url: String, modifier: Modifier = Modifier) {
+    val image by produceState(ImageCache.memory(url), url) {
+        if (value == null) value = ImageCache.load(url)
+    }
+    Box(modifier.clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+        image?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     }
 }
 

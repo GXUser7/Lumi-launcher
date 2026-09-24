@@ -1,12 +1,23 @@
 package com.yumi.launcher.ui.packs
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,31 +40,41 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.DriveFileRenameOutline
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.ViewInAr
+import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,11 +82,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,17 +100,35 @@ import com.yumi.launcher.core.VersionEntry
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.settings.LauncherSettings
+import com.yumi.launcher.ui.components.ChoiceGroup
+import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.FieldShape
+import com.yumi.launcher.ui.components.FormSection
+import com.yumi.launcher.ui.components.Hint
+import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.Label
+import com.yumi.launcher.ui.components.LocalFieldContainer
 import com.yumi.launcher.ui.components.PackIcons
 import com.yumi.launcher.ui.components.PackTile
+import com.yumi.launcher.ui.components.SearchField
 import com.yumi.launcher.ui.components.ShapeTile
+import com.yumi.launcher.ui.components.Tip
+import com.yumi.launcher.ui.components.ToggleRow
 import com.yumi.launcher.ui.components.gigabytes
 import com.yumi.launcher.ui.home.PackRequest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.awt.FileDialog
+import java.awt.Frame
+import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-/** Where the packs screen is: the list, one pack's editor, or the editor's version picker. */
+/** Where the packs screen is: the list, the modpack catalogue, one pack's editor, or its version picker. */
 private sealed interface Mode {
     data object List : Mode
-    data object Import : Mode
+    data object Catalog : Mode
     data class Edit(val draft: Draft) : Mode
     data class PickVersion(val draft: Draft) : Mode
 }
@@ -99,6 +141,8 @@ private class Draft(
     loader: Loader,
     loaderVersion: String?,
     icon: Int,
+    /** The picture a catalogue pack came with, kept so it can be picked again after trying a glyph. */
+    val picture: String?,
     memoryMb: Int?,
     jvmArgs: String,
     width: Int?,
@@ -112,6 +156,7 @@ private class Draft(
     /** Null: the newest stable release, picked and pinned on first launch. */
     var loaderVersion by mutableStateOf(loaderVersion)
     var icon by mutableIntStateOf(icon)
+    var usePicture by mutableStateOf(picture != null)
     var customMemory by mutableStateOf(memoryMb != null)
     var memoryMb by mutableIntStateOf(memoryMb ?: 4096)
     var jvmArgs by mutableStateOf(jvmArgs)
@@ -123,25 +168,28 @@ private class Draft(
 
     companion object {
         fun of(instance: Instance) = Draft(
-            instance.id, instance.name, instance.version, instance.loader, instance.loaderVersion, instance.icon,
+            instance.id, instance.name, instance.version, instance.loader, instance.loaderVersion, instance.icon, instance.iconUrl,
             instance.memoryMb, instance.jvmArgs, instance.width, instance.height, instance.fullscreen,
         )
-        fun new(latest: String?, icon: Int) = Draft(null, "", latest ?: "", Loader.Vanilla, null, icon, null, "", null, null, false)
+        fun new(latest: String?, icon: Int) = Draft(null, "", latest ?: "", Loader.Vanilla, null, icon, null, null, "", null, null, false)
     }
 }
 
 @Composable
 fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: () -> Unit, onPlay: (Instance) -> Unit) {
     var mode by remember { mutableStateOf<Mode>(Mode.List) }
+    val nextIcon = { model.instances.all.size % PackIcons.size }
     LaunchedEffect(request) {
         when (request) {
-            PackRequest.Create -> mode = Mode.Edit(Draft.new(model.manifest?.latest?.release, model.instances.all.size % PackIcons.size))
-            PackRequest.Import -> mode = Mode.Import
+            PackRequest.Create -> mode = Mode.Edit(Draft.new(model.manifest?.latest?.release, nextIcon()))
+            PackRequest.Import -> mode = Mode.Catalog
             is PackRequest.Edit -> model.instances[request.id]?.let { mode = Mode.Edit(Draft.of(it)) }
             null -> Unit
         }
         if (request != null) onRequestHandled()
     }
+    // A finished import is shown where packs are: back to the list, with the new one on top.
+    LaunchedEffect(model.packImports.finished) { if (model.packImports.finished != null && mode == Mode.Catalog) mode = Mode.List }
     AnimatedContent(
         targetState = mode,
         contentKey = { it::class },
@@ -150,12 +198,13 @@ fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: (
         when (current) {
             Mode.List -> PackList(
                 model,
-                onCreate = { mode = Mode.Edit(Draft.new(model.manifest?.latest?.release, model.instances.all.size % PackIcons.size)) },
-                onImport = { mode = Mode.Import },
+                onCreate = { mode = Mode.Edit(Draft.new(model.manifest?.latest?.release, nextIcon())) },
+                onCatalog = { mode = Mode.Catalog },
+                onFile = { pickArchive()?.let { model.packImports.installFile(it, nextIcon()) } },
                 onEdit = { mode = Mode.Edit(Draft.of(it)) },
                 onPlay = onPlay,
             )
-            Mode.Import -> PackImportScreen(model) { mode = Mode.List }
+            Mode.Catalog -> PackCatalogScreen(model, onBack = { mode = Mode.List })
             is Mode.Edit -> PackEditor(
                 model,
                 current.draft,
@@ -171,64 +220,207 @@ fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: (
     }
 }
 
+/** The system file dialog, for a modpack archive. */
+internal fun pickArchive(): File? {
+    val dialog = FileDialog(null as Frame?, "Сборка: .mrpack или .zip", FileDialog.LOAD).apply {
+        filenameFilter = java.io.FilenameFilter { _, name -> name.endsWith(".mrpack", true) || name.endsWith(".zip", true) }
+        isVisible = true
+    }
+    return dialog.file?.let { File(dialog.directory, it) }
+}
+
 @Composable
-private fun PackList(model: LauncherModel, onCreate: () -> Unit, onImport: () -> Unit, onEdit: (Instance) -> Unit, onPlay: (Instance) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
+private fun PackList(
+    model: LauncherModel,
+    onCreate: () -> Unit,
+    onCatalog: () -> Unit,
+    onFile: () -> Unit,
+    onEdit: (Instance) -> Unit,
+    onPlay: (Instance) -> Unit,
+) {
+    val packs = model.instances.all
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Сборки", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = onImport) {
-                Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(5.dp))
-                Text("Готовые сборки")
+        Column {
+            Text("Сборки", style = MaterialTheme.typography.displaySmall)
+            Spacer(Modifier.height(6.dp))
+            Hint(
+                when (packs.size) {
+                    0 -> "Сборка — версия Minecraft со своей папкой: миры, настройки и моды у каждой отдельно."
+                    else -> "${countOf(packs.size, "сборка", "сборки", "сборок")} · нажмите на сборку, чтобы её настроить"
+                },
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val scheme = MaterialTheme.colorScheme
+            ActionTile(Icons.Rounded.Add, "Новая", "своя, с нуля", scheme.primaryContainer, scheme.onPrimaryContainer, Modifier.weight(1f), onCreate)
+            ActionTile(Icons.Rounded.Explore, "Каталог", "Modrinth, CurseForge", scheme.tertiaryContainer, scheme.onTertiaryContainer, Modifier.weight(1f), onCatalog)
+            ActionTile(Icons.Rounded.UploadFile, "Из файла", ".mrpack или .zip", scheme.secondaryContainer, scheme.onSecondaryContainer, Modifier.weight(1f), onFile)
+        }
+        ImportStatus(model, onPlay = onPlay, onEdit = onEdit)
+        model.manifestError?.let { ErrorLine(it) { model.refreshVersions() } }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(packs, key = { it.id }) { instance ->
+                PackCard(model, instance, chosen = instance.id == model.selected?.id, onEdit = { onEdit(instance) }, onPlay = { onPlay(instance) })
+            }
+        }
+    }
+}
+
+/**
+ * A big tonal tile for one way to get a pack. Pressed, its corners pull in — the expressive
+ * shape change M3 gives buttons, on a surface too large for a button.
+ */
+@Composable
+private fun ActionTile(icon: ImageVector, title: String, subtitle: String, container: Color, content: Color, modifier: Modifier, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val corner by animateDpAsState(if (pressed) 14.dp else 26.dp, spring(dampingRatio = 0.5f, stiffness = 700f))
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(corner),
+        color = container,
+        contentColor = content,
+        interactionSource = interaction,
+        modifier = modifier.height(104.dp),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            Icon(icon, null, Modifier.size(28.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = content.copy(alpha = 0.78f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** A modpack being installed, one that failed, or one that has just arrived. */
+@Composable
+private fun ImportStatus(model: LauncherModel, onPlay: (Instance) -> Unit, onEdit: (Instance) -> Unit) {
+    val imports = model.packImports
+    val scheme = MaterialTheme.colorScheme
+    val title = imports.title
+    val error = imports.error
+    val finished = imports.finished?.let { model.instances[it.id] }
+    AnimatedVisibility(title != null || error != null || finished != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        when {
+            title != null -> ImportProgress(model, Modifier.fillMaxWidth())
+            error != null -> Surface(shape = RoundedCornerShape(22.dp), color = scheme.errorContainer, contentColor = scheme.onErrorContainer, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    IconButton(onClick = { imports.error = null }) { Icon(Icons.Rounded.Close, "Скрыть") }
+                }
+            }
+            finished != null -> Surface(shape = RoundedCornerShape(22.dp), color = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.CheckCircle, null, Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("«${finished.name}» установлена", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${finished.loader.label} ${finished.version} · уже выбрана на главной", style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = { imports.finished = null; onEdit(finished) }) { Text("Настроить") }
+                    Button(onClick = { imports.finished = null; onPlay(finished) }, shapes = ButtonDefaults.shapes(), enabled = !model.busy) { Text("Играть") }
+                    IconButton(onClick = { imports.finished = null }) { Icon(Icons.Rounded.Close, "Скрыть") }
+                }
+            }
+        }
+    }
+}
+
+/** The running import: which pack, what step, how far, and a way to stop it. */
+@Composable
+internal fun ImportProgress(model: LauncherModel, modifier: Modifier = Modifier) {
+    val imports = model.packImports
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainerHigh, modifier = modifier) {
+        Column(Modifier.padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LoadingIndicator(Modifier.size(32.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Устанавливаем «${imports.title.orEmpty()}»", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Hint("${imports.stage} · ${(imports.progress * 100).toInt()}%")
+                }
+                TextButton(onClick = imports::cancel) { Text("Отменить") }
+            }
+            LinearWavyProgressIndicator(progress = { imports.progress }, modifier = Modifier.fillMaxWidth().padding(end = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun PackCard(model: LauncherModel, instance: Instance, chosen: Boolean, onEdit: () -> Unit, onPlay: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val mods by produceState(-1, instance.id) {
+        value = withContext(Dispatchers.IO) { model.instances.modsDir(instance).listFiles().orEmpty().count { it.name.endsWith(".jar") } }
+    }
+    Surface(
+        onClick = onEdit,
+        shape = RoundedCornerShape(26.dp),
+        color = if (chosen) scheme.surfaceContainerHigh else scheme.surfaceContainer,
+        border = if (chosen) BorderStroke(2.dp, scheme.primary) else null,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            PackTile(instance, 60.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(instance.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (chosen) {
+                        Spacer(Modifier.width(8.dp))
+                        InfoChip("Выбрана", icon = Icons.Rounded.Check, container = scheme.primary, content = scheme.onPrimary)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    InfoChip(instance.version, icon = Icons.Rounded.ViewInAr)
+                    if (instance.loader != Loader.Vanilla) InfoChip(instance.loader.label, icon = Icons.Rounded.Widgets)
+                    if (mods > 0) InfoChip(countOf(mods, "мод", "мода", "модов"), icon = Icons.Rounded.Extension)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.History, null, Modifier.size(14.dp), tint = scheme.onSurfaceVariant)
+                    Spacer(Modifier.width(4.dp))
+                    Hint(played(instance))
+                }
             }
             Spacer(Modifier.width(8.dp))
-            Button(onClick = onCreate, shapes = ButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(20.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Новая")
-            }
-        }
-        model.manifestError?.let { ErrorLine(it) { model.refreshVersions() } }
-        if (model.instances.all.isEmpty()) {
-            Text(
-                "Сборка — это версия Minecraft со своей папкой: миры, настройки и потом моды у каждой отдельно.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = scheme.onSurfaceVariant,
-            )
-            return@Column
-        }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(model.instances.all, key = { it.id }) { instance ->
-                val chosen = instance.id == model.selected?.id
-                Surface(
-                    onClick = { onEdit(instance) },
-                    shape = RoundedCornerShape(24.dp),
-                    color = if (chosen) scheme.surfaceContainerHigh else scheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PackTile(instance.icon, 52.dp)
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(instance.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                                if (chosen) {
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(Icons.Rounded.CheckCircle, "Выбрана", Modifier.size(16.dp), tint = scheme.primary)
-                                }
-                            }
-                            Text("${instance.loader.label} ${instance.version}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                        }
-                        FilledTonalIconButton(
-                            onClick = { onPlay(instance) },
-                            enabled = !model.busy,
-                            shapes = IconButtonDefaults.shapes(),
-                        ) { Icon(Icons.Rounded.PlayArrow, "Играть в «${instance.name}»") }
+            Tip("Играть в «${instance.name}»") {
+                if (chosen) {
+                    FilledIconButton(onClick = onPlay, enabled = !model.busy, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(52.dp)) {
+                        Icon(Icons.Rounded.PlayArrow, "Играть в «${instance.name}»", Modifier.size(28.dp))
+                    }
+                } else {
+                    FilledTonalIconButton(onClick = onPlay, enabled = !model.busy, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(52.dp)) {
+                        Icon(Icons.Rounded.PlayArrow, "Играть в «${instance.name}»", Modifier.size(28.dp))
                     }
                 }
             }
         }
     }
+}
+
+private fun played(instance: Instance): String {
+    val last = instance.lastPlayed ?: return "Ещё не запускалась"
+    val days = (System.currentTimeMillis() - last) / 86_400_000
+    val hours = instance.playSeconds / 3600
+    val minutes = instance.playSeconds / 60 % 60
+    val total = if (hours > 0) "$hours ч $minutes мин" else "$minutes мин"
+    val ago = when (days) {
+        0L -> "сегодня"
+        1L -> "вчера"
+        else -> "$days дн. назад"
+    }
+    return "Играли $ago · всего $total"
+}
+
+/** "1 сборка", "3 сборки", "12 сборок". */
+internal fun countOf(n: Int, one: String, few: String, many: String): String {
+    val word = when {
+        n % 10 == 1 && n % 100 != 11 -> one
+        n % 10 in 2..4 && n % 100 !in 12..14 -> few
+        else -> many
+    }
+    return "$n $word"
 }
 
 @Composable
@@ -237,77 +429,56 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
     val existing = draft.id?.let { model.instances[it] }
     var confirmDelete by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Header(if (existing == null) "Новая сборка" else "Сборка", onDone)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            OutlinedTextField(
-                value = draft.name,
-                onValueChange = { draft.name = it.take(40) },
-                label = { Text("Название") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Label("Версия")
-            Surface(onClick = onPickVersion, shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ShapeTile(Icons.Rounded.ViewInAr, scheme.primaryContainer, scheme.onPrimaryContainer, 44.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(draft.version.ifEmpty { "Выберите версию" }, style = MaterialTheme.typography.titleMedium)
-                        val entry = model.manifest?.versions?.firstOrNull { it.id == draft.version }
-                        Text(entry?.let { "${typeLabel(it.type)} · ${it.releaseTime.take(10)}" } ?: "Ванилла", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                    }
-                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = scheme.onSurfaceVariant)
+        Header(if (existing == null) "Новая сборка" else draft.name.ifBlank { existing.name }, onDone)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FormSection("Сборка", Icons.Rounded.Inventory2) {
+                Field(
+                    value = draft.name,
+                    onValueChange = { draft.name = it.take(40) },
+                    label = "Название",
+                    placeholder = "Например, «Выживание с друзьями»",
+                    icon = Icons.Rounded.DriveFileRenameOutline,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Label("Значок")
+                IconPicker(draft)
+            }
+            FormSection("Игра", Icons.Rounded.ViewInAr, subtitle = "Версия Minecraft и загрузчик модов") {
+                VersionRow(model, draft.version, onPickVersion)
+                Label("Загрузчик модов")
+                ChoiceGroup(Loader.entries, draft.loader, { it.label }, {
+                    if (draft.loader != it) draft.loaderVersion = null
+                    draft.loader = it
+                }, height = 44.dp)
+                Hint(loaderHint(draft.loader))
+                if (draft.loader != Loader.Vanilla && draft.version.isNotBlank()) {
+                    LoaderVersionPicker(draft.loader, draft.version, draft.loaderVersion) { draft.loaderVersion = it }
                 }
             }
-            Label("Загрузчик модов")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Loader.entries.forEach { loader ->
-                    FilterChip(
-                        selected = draft.loader == loader,
-                        onClick = {
-                            if (draft.loader != loader) draft.loaderVersion = null
-                            draft.loader = loader
-                        },
-                        label = { Text(loader.label) },
-                    )
+            FormSection("Запуск", Icons.Rounded.Memory) {
+                ToggleRow(
+                    "Своя память",
+                    draft.customMemory,
+                    { draft.customMemory = it },
+                    description = if (draft.customMemory) "Только для этой сборки" else "Как в настройках лаунчера: ${gigabytes(model.settings.memoryMb)}",
+                )
+                if (draft.customMemory) MemorySlider(draft.memoryMb) { draft.memoryMb = it }
+                Field(
+                    value = draft.jvmArgs,
+                    onValueChange = { draft.jvmArgs = it },
+                    label = "Аргументы Java",
+                    placeholder = "-XX:+UseZGC",
+                    icon = Icons.Rounded.Code,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            FormSection("Окно игры", Icons.Rounded.AspectRatio) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NumberField("Ширина", draft.width, Modifier.weight(1f)) { draft.width = it }
+                    NumberField("Высота", draft.height, Modifier.weight(1f)) { draft.height = it }
                 }
+                ToggleRow("Полный экран", draft.fullscreen, { draft.fullscreen = it }, description = "Игра откроется на весь экран")
             }
-            if (draft.loader != Loader.Vanilla && draft.version.isNotBlank()) {
-                LoaderVersionPicker(draft.loader, draft.version, draft.loaderVersion) { draft.loaderVersion = it }
-            }
-            Label("Значок")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PackIcons.indices.forEach { i ->
-                    val picked = draft.icon == i
-                    Box(
-                        Modifier.size(44.dp).clip(CircleShape).clickable { draft.icon = i },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        PackTile(i, if (picked) 44.dp else 34.dp)
-                    }
-                }
-            }
-            SwitchRow("Своя память", draft.customMemory) { draft.customMemory = it }
-            if (draft.customMemory) {
-                MemorySlider(draft.memoryMb) { draft.memoryMb = it }
-            } else {
-                Text("Как в настройках лаунчера: ${gigabytes(model.settings.memoryMb)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            }
-            OutlinedTextField(
-                value = draft.jvmArgs,
-                onValueChange = { draft.jvmArgs = it },
-                label = { Text("Аргументы Java") },
-                placeholder = { Text("-XX:+UseZGC") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Label("Окно игры")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NumberField("Ширина", draft.width, Modifier.weight(1f)) { draft.width = it }
-                NumberField("Высота", draft.height, Modifier.weight(1f)) { draft.height = it }
-            }
-            SwitchRow("Полный экран", draft.fullscreen) { draft.fullscreen = it }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
@@ -318,9 +489,14 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
                 },
                 enabled = draft.valid,
                 shapes = ButtonDefaults.shapes(),
-            ) { Text(if (existing == null) "Создать" else "Сохранить") }
+                modifier = Modifier.height(48.dp),
+            ) {
+                Icon(if (existing == null) Icons.Rounded.Add else Icons.Rounded.Check, null, Modifier.size(20.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (existing == null) "Создать" else "Сохранить")
+            }
             if (existing != null) {
-                OutlinedButton(onClick = { model.openFolder(model.instances.gameDir(existing)) }, shapes = ButtonDefaults.shapes()) {
+                OutlinedButton(onClick = { model.openFolder(model.instances.gameDir(existing)) }, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(48.dp)) {
                     Icon(Icons.Outlined.FolderOpen, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Папка")
@@ -335,8 +511,69 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
                         } else confirmDelete = true
                     },
                     enabled = !running,
-                ) { Text(if (confirmDelete) "Точно удалить?" else "Удалить", color = scheme.error) }
+                    colors = ButtonDefaults.textButtonColors(contentColor = scheme.error),
+                ) {
+                    Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (confirmDelete) "Точно удалить?" else "Удалить")
+                }
             }
+        }
+    }
+}
+
+private fun loaderHint(loader: Loader) = when (loader) {
+    Loader.Vanilla -> "Чистая игра без модов."
+    Loader.Fabric -> "Лёгкий и быстрый: Sodium, Iris и большинство новых модов."
+    Loader.Quilt -> "Ответвление Fabric, запускает и его моды."
+    Loader.Forge -> "Классика больших сборок — от 1.7.10 до 1.20.1."
+    Loader.NeoForge -> "Преемник Forge: крупные моды на 1.20.2 и новее."
+}
+
+/** The glyphs, and the pack's own picture first when it has one. The picked one wears a ring. */
+@Composable
+private fun IconPicker(draft: Draft) {
+    val scheme = MaterialTheme.colorScheme
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        @Composable
+        fun Choice(picked: Boolean, onPick: () -> Unit, tile: @Composable () -> Unit) {
+            Box(
+                Modifier.size(48.dp).clip(CircleShape)
+                    .then(if (picked) Modifier.border(2.dp, scheme.primary, CircleShape) else Modifier)
+                    .clickable(onClick = onPick),
+                contentAlignment = Alignment.Center,
+            ) { tile() }
+        }
+        draft.picture?.let { url ->
+            Choice(draft.usePicture, { draft.usePicture = true }) {
+                PackTile(Instance(id = "", name = "", version = "", icon = draft.icon, iconUrl = url), if (draft.usePicture) 38.dp else 32.dp)
+            }
+        }
+        PackIcons.indices.forEach { i ->
+            val picked = !draft.usePicture && draft.icon == i
+            Choice(picked, { draft.icon = i; draft.usePicture = false }) { PackTile(i, if (picked) 38.dp else 32.dp) }
+        }
+    }
+}
+
+/** The pack's version as a field: tapping it opens the full list. */
+@Composable
+private fun VersionRow(model: LauncherModel, version: String, onPick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val entry = model.manifest?.versions?.firstOrNull { it.id == version }
+    Surface(onClick = onPick, shape = FieldShape, color = LocalFieldContainer.current ?: scheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            ShapeTile(Icons.Rounded.ViewInAr, scheme.primaryContainer, scheme.onPrimaryContainer, 44.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Версия Minecraft", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                Text(version.ifEmpty { "Выберите версию" }, style = MaterialTheme.typography.titleMedium)
+            }
+            if (entry != null) {
+                InfoChip(typeLabel(entry.type) + " · " + shortDate(entry.releaseTime))
+                Spacer(Modifier.width(8.dp))
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = scheme.onSurfaceVariant)
         }
     }
 }
@@ -351,6 +588,7 @@ private fun save(model: LauncherModel, draft: Draft, existing: Instance?): Insta
         loader = draft.loader,
         loaderVersion = if (draft.loader == Loader.Vanilla) null else draft.loaderVersion,
         icon = draft.icon,
+        iconUrl = if (draft.usePicture) draft.picture else null,
         memoryMb = if (draft.customMemory) draft.memoryMb else null,
         jvmArgs = draft.jvmArgs.trim(),
         width = if (width != null && height != null) width else null,
@@ -377,11 +615,11 @@ private fun LoaderVersionPicker(loader: Loader, minecraft: String, selected: Str
         Surface(
             onClick = { open = true },
             enabled = !list.isNullOrEmpty(),
-            shape = RoundedCornerShape(18.dp),
-            color = scheme.surfaceContainer,
+            shape = FieldShape,
+            color = LocalFieldContainer.current ?: scheme.surfaceContainerHigh,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Версия ${loader.label}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                     Text(
@@ -396,14 +634,20 @@ private fun LoaderVersionPicker(loader: Loader, minecraft: String, selected: Str
                         color = if (list?.isEmpty() == true || failed) scheme.error else scheme.onSurface,
                     )
                 }
+                if (list == null && !failed) LoadingIndicator(Modifier.size(24.dp))
                 if (!list.isNullOrEmpty()) Icon(Icons.Rounded.UnfoldMore, null, tint = scheme.onSurfaceVariant)
             }
         }
         DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp), modifier = Modifier.heightIn(max = 360.dp)) {
-            DropdownMenuItem(text = { Text("Автоматически — последняя стабильная") }, onClick = { onPick(null); open = false })
+            DropdownMenuItem(
+                text = { Text("Автоматически — последняя стабильная") },
+                trailingIcon = { if (selected == null) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
+                onClick = { onPick(null); open = false },
+            )
             list.orEmpty().take(60).forEach { v ->
                 DropdownMenuItem(
                     text = { Text(if (v.stable) "${v.id} · стабильная" else v.id) },
+                    trailingIcon = { if (selected == v.id) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
                     onClick = { onPick(v.id); open = false },
                 )
             }
@@ -411,27 +655,19 @@ private fun LoaderVersionPicker(loader: Loader, minecraft: String, selected: Str
     }
 }
 
+/** Versions modpacks are made for most; offered first, a click away. */
+internal val PopularVersions = listOf("1.21.1", "1.20.1", "1.19.2", "1.18.2", "1.16.5", "1.12.2", "1.7.10")
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VersionPicker(model: LauncherModel, current: String, onBack: () -> Unit, onPick: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     var query by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf(VersionFilter.Releases) }
+    var filter by remember { mutableStateOf(VersionFilter.entries.firstOrNull { f -> model.manifest?.versions?.firstOrNull { it.id == current }?.let(f::matches) == true } ?: VersionFilter.Releases) }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Header("Версия Minecraft", onBack)
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Например, 1.20.1") },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            singleLine = true,
-            shape = CircleShape,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            VersionFilter.entries.forEach { f ->
-                FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) })
-            }
-        }
+        SearchField(query, { query = it }, "Например, 1.20.1", Modifier.fillMaxWidth())
+        ChoiceGroup(VersionFilter.entries, filter, { it.label }, { filter = it }, height = 44.dp)
         val manifest = model.manifest
         if (manifest == null) {
             val error = model.manifestError
@@ -439,26 +675,61 @@ private fun VersionPicker(model: LauncherModel, current: String, onBack: () -> U
             else Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
             return@Column
         }
-        val versions = remember(manifest, filter, query) {
-            manifest.versions.filter { filter.matches(it) && (query.isBlank() || query.trim() in it.id) }
+        if (filter == VersionFilter.Releases && query.isBlank()) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Для модов:", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
+                PopularVersions.filter { v -> manifest.versions.any { it.id == v } }.forEach { v ->
+                    Surface(
+                        onClick = { onPick(v) },
+                        shape = CircleShape,
+                        color = if (v == current) scheme.primary else scheme.surfaceContainerHigh,
+                        contentColor = if (v == current) scheme.onPrimary else scheme.onSurface,
+                    ) {
+                        Text(v, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+                    }
+                }
+            }
+        }
+        val groups = remember(manifest, filter, query) {
+            manifest.versions
+                .filter { filter.matches(it) && (query.isBlank() || query.trim() in it.id) }
+                .groupBy { filter.group(it) }
+        }
+        if (groups.isEmpty()) {
+            Hint("Ничего не нашлось${if (query.isNotBlank()) " по «${query.trim()}»" else ""}.")
+            return@Column
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(versions, key = { it.id }) { entry ->
-                val picked = entry.id == current
-                Surface(
-                    onClick = { onPick(entry.id) },
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (picked) scheme.primaryContainer else scheme.surfaceContainer,
-                    border = if (entry.id == manifest.latest.release) BorderStroke(1.dp, scheme.primary.copy(alpha = 0.5f)) else null,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(entry.id, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                        Text(
-                            (if (entry.id == manifest.latest.release) "последний · " else "") + entry.releaseTime.take(10),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                        )
+            groups.forEach { (group, versions) ->
+                stickyHeader(key = "group:$group") {
+                    Text(
+                        group,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = scheme.primary,
+                        modifier = Modifier.fillMaxWidth().background(scheme.surface).padding(start = 6.dp, top = 8.dp, bottom = 4.dp),
+                    )
+                }
+                items(versions, key = { it.id }) { entry ->
+                    val picked = entry.id == current
+                    val latest = entry.id == manifest.latest.release || entry.id == manifest.latest.snapshot
+                    Surface(
+                        onClick = { onPick(entry.id) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (picked) scheme.primaryContainer else scheme.surfaceContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(entry.id, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            if (latest) {
+                                InfoChip("Последняя", container = scheme.tertiaryContainer, content = scheme.onTertiaryContainer)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(shortDate(entry.releaseTime), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                            if (picked) {
+                                Spacer(Modifier.width(8.dp))
+                                Icon(Icons.Rounded.Check, "Выбрана", Modifier.size(20.dp), tint = scheme.primary)
+                            }
+                        }
                     }
                 }
             }
@@ -474,6 +745,13 @@ private enum class VersionFilter(val label: String) {
         Snapshots -> entry.type == "snapshot"
         Old -> entry.type == "old_beta" || entry.type == "old_alpha"
     }
+
+    /** Releases by line — 1.21 with its updates; snapshots by year; old builds by beta and alpha. */
+    fun group(entry: VersionEntry): String = when (this) {
+        Releases -> if (entry.id.startsWith("1.")) "Minecraft " + entry.id.split('.').take(2).joinToString(".") else "Minecraft " + entry.id.substringBefore('.')
+        Snapshots -> entry.releaseTime.take(4)
+        Old -> typeLabel(entry.type)
+    }
 }
 
 private fun typeLabel(type: String) = when (type) {
@@ -484,30 +762,28 @@ private fun typeLabel(type: String) = when (type) {
     else -> type
 }
 
+/** "2024-06-13T…" → "13 июн. 2024". */
+internal fun shortDate(iso: String): String = runCatching {
+    LocalDate.parse(iso.take(10)).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("ru")))
+}.getOrDefault(iso.take(10))
+
 @Composable
-private fun Header(title: String, onBack: () -> Unit) {
+internal fun Header(title: String, onBack: () -> Unit, trailing: @Composable () -> Unit = {}) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад") }
         Spacer(Modifier.width(4.dp))
-        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(title, style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        trailing()
     }
 }
 
 @Composable
-private fun ErrorLine(message: String, onRetry: () -> Unit) {
-    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+internal fun ErrorLine(message: String, onRetry: () -> Unit) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f), maxLines = 2)
             IconButton(onClick = onRetry) { Icon(Icons.Rounded.Refresh, "Повторить", tint = MaterialTheme.colorScheme.onErrorContainer) }
         }
-    }
-}
-
-@Composable
-internal fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
@@ -531,14 +807,12 @@ internal fun MemorySlider(valueMb: Int, onChange: (Int) -> Unit) {
 
 @Composable
 private fun NumberField(label: String, value: String, modifier: Modifier, onChange: (String) -> Unit) {
-    OutlinedTextField(
+    Field(
         value = value,
         onValueChange = { onChange(it.filter(Char::isDigit).take(4)) },
-        label = { Text(label) },
-        placeholder = { Text("авто") },
-        singleLine = true,
+        label = label,
+        placeholder = "авто",
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        shape = RoundedCornerShape(16.dp),
         modifier = modifier,
     )
 }

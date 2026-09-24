@@ -187,6 +187,9 @@ internal object ServerPing {
         return out.filter { it.text.isNotEmpty() }
     }
 
+    /** A description as written in `server.properties`, § codes and all — for previewing one being typed. */
+    fun motdOf(text: String): List<MotdSpan> = legacyText(text, null, false, false).filter { it.text.isNotEmpty() }
+
     private fun legacyText(text: String, color: Int?, bold: Boolean, italic: Boolean): List<MotdSpan> {
         val out = mutableListOf<MotdSpan>()
         var c = color

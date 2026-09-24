@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material3.Button
@@ -39,8 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -64,7 +62,7 @@ import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PlayStatus
 import com.yumi.launcher.settings.AccountKind
-import com.yumi.launcher.ui.components.Avatar
+import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Label
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.PlayButton
@@ -133,24 +131,13 @@ private fun NickField(model: LauncherModel) {
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
     val valid = settings.nickValid
-    TextField(
+    Field(
         value = settings.nick,
         onValueChange = { settings.nick = it.take(16); model.dismissError() },
-        label = { Text("Ник в игре") },
-        singleLine = true,
+        label = "Ник в игре",
+        icon = Icons.Rounded.Person,
         isError = settings.nick.isNotEmpty() && !valid,
-        supportingText = {
-            Text(if (settings.nick.isEmpty() || valid) "Под этим ником вас увидят друзья" else "Только латиница, цифры и _, от 3 до 16 символов")
-        },
-        shape = RoundedCornerShape(16.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = scheme.surfaceContainerHigh,
-            unfocusedContainerColor = scheme.surfaceContainerHigh,
-            errorContainerColor = scheme.surfaceContainerHigh,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            errorIndicatorColor = Color.Transparent,
-        ),
+        supporting = if (settings.nick.isEmpty() || valid) "Под этим ником вас увидят друзья" else "Только латиница, цифры и _, от 3 до 16 символов",
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -208,7 +195,7 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
             modifier = Modifier.fillMaxWidth().height(68.dp),
         ) {
             Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (selected != null) PackTile(selected.icon, 48.dp) else ShapeTile(Icons.Rounded.Add, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+                if (selected != null) PackTile(selected, 48.dp) else ShapeTile(Icons.Rounded.Add, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
                 Column(Modifier.weight(1f)) {
                     Text(selected?.name ?: "Создайте сборку", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
@@ -226,7 +213,7 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { PackMenuText(instance) },
-                    leadingIcon = { PackTile(instance.icon, 36.dp) },
+                    leadingIcon = { PackTile(instance, 36.dp) },
                     trailingIcon = { if (instance.id == selected?.id) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
                     onClick = { model.select(instance); open = false },
                 )

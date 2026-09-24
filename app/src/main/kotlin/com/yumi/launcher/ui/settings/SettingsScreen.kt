@@ -28,15 +28,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.rounded.Coffee
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,9 +53,8 @@ import com.yumi.launcher.settings.SceneMotion
 import com.yumi.launcher.settings.SceneQuality
 import com.yumi.launcher.settings.ThemeMode
 import com.yumi.launcher.ui.components.ChoiceGroup
+import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Label
-import com.yumi.launcher.ui.components.choiceColors
-import com.yumi.launcher.ui.components.connectedShapes
 import com.yumi.launcher.ui.components.freeSpace
 import com.yumi.launcher.ui.components.hasNonAscii
 import com.yumi.launcher.ui.components.pickFolder
@@ -95,9 +93,10 @@ fun SettingsScreen(model: LauncherModel) {
         Choice(SceneQuality.entries, settings.sceneQuality, { it.label }, { settings.sceneQuality = it })
         Hint(
             when (settings.sceneQuality) {
-                SceneQuality.Low -> "Плоское освещение — для слабых компьютеров."
-                SceneQuality.High -> "Мягкий свет в углах, как в Minecraft, и тени от солнца или луны."
-                SceneQuality.Ultra -> "Всё из «Высокого», плюс лучи света, дымка у горизонта и живая вода."
+                SceneQuality.Low -> "Блоки без текстур и простой свет — для слабых компьютеров."
+                SceneQuality.Medium -> "Текстуры, мягкий свет в углах, свет от факелов и фонарей, текущая вода и лава."
+                SceneQuality.High -> "Плюс тени от солнца и луны, ореолы и блики у огней, блики от солнца, дым, искры, светлячки и далёкие острова."
+                SceneQuality.Ultra -> "Всё сразу: лучи света, северное сияние, падающие звёзды, листва на ветру, блики на воде, тени облаков, птицы."
             },
         )
         Label("Кадров в секунду")
@@ -123,13 +122,12 @@ fun SettingsScreen(model: LauncherModel) {
             Hint("Лаунчер сам скачает от Mojang ту Java, которая нужна версии: 8 для старых, 25 для новых.")
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                Field(
                     value = settings.javaPath,
                     onValueChange = { settings.javaPath = it },
-                    label = { Text("Путь к javaw.exe") },
-                    singleLine = true,
+                    label = "Путь к javaw.exe",
+                    icon = Icons.Rounded.Coffee,
                     isError = !File(settings.javaPath.trim()).isFile,
-                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.weight(1f),
                 )
                 OutlinedButton(onClick = { pickJava()?.let { settings.javaPath = it } }, shapes = ButtonDefaults.shapes()) { Text("Обзор") }
@@ -140,13 +138,12 @@ fun SettingsScreen(model: LauncherModel) {
         GameFolder(model)
 
         Label("Ключ CurseForge")
-        OutlinedTextField(
+        Field(
             value = settings.curseForgeKey,
             onValueChange = { settings.curseForgeKey = it.trim() },
-            placeholder = { Text("Не задан — моды только с Modrinth") },
-            singleLine = true,
+            placeholder = "Не задан — моды только с Modrinth",
+            icon = Icons.Rounded.Key,
             visualTransformation = if (settings.curseForgeKey.isEmpty()) VisualTransformation.None else PasswordVisualTransformation(),
-            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
         )
         Hint("Бесплатный личный ключ: console.curseforge.com → API Keys. Modrinth работает без ключа.")
