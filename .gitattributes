@@ -9,3 +9,5 @@ gradlew text eol=lf
 # UTF-16, so the Russian messages survive any Windows language.
 *.vbs binary
 *.ico binary
+*.bmp binary
+*.iss text eol=crlf

@@ -49,6 +49,17 @@ export GRADLE_USER_HOME=C:/Users/000/.gradle    # тёплый кэш с арт�
 первая сборка скачает зависимости. `systemProp.https.protocols=TLSv1.2` в `gradle.properties` не
 трогай — без неё Maven Central на сети владельца обрывает TLS.
 
+**Установщик** — `./scripts/build-installer.ps1 -Offline` (PowerShell): `:app:createDistributable`
+(образ приложения с Java внутри, `includeAllModules`), затем Inno Setup 6 по `installer/YumiLauncher.iss`
+→ `dist/Yumi-Launcher-<версия>-windows-x64-setup.exe` и его SHA-256. `ISCC.exe` ищется в
+`.local/tools/inno` (копия из YumiDesktop), потом в Program Files. Ставится для текущего
+пользователя без UAC (`PrivilegesRequired=lowest`, `%LOCALAPPDATA%\Programs\Yumi Launcher`); при
+удалении настройки, `%APPDATA%\YumiLauncher` и папка игры остаются. Версию меняй в двух местах:
+`packageVersion` в `app/build.gradle.kts` и `AppVersion` в `.iss`. `AppId` установщика и
+`upgradeUuid` не менять — по ним обновление находит старую установку. Проверка: тихая установка
+в `.local` (`/VERYSILENT /DIR=…`), запуск установленного `YumiLauncher.exe --ui-smoke --only=…`
+из отдельной рабочей папки, затем `unins000.exe /VERYSILENT`.
+
 Ошибки компиляции ищи так: `./gradlew --offline :app:compileKotlin -q 2>&1 | grep "^e:"`.
 
 ## Проверки

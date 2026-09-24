@@ -24,8 +24,18 @@ compose.desktop {
         mainClass = "com.yumi.launcher.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Msi)
-            packageName = "Yumi Launcher"
+            // The folder and the .exe; the name people see comes from the installer (installer/YumiLauncher.iss).
+            packageName = "YumiLauncher"
             packageVersion = "0.1.0"
+            description = "Yumi Launcher"
+            vendor = "Yumi"
+            // The whole JDK: the launcher reaches for java.net.http, prefs, management and TLS, and a
+            // module left out by jlink only shows up as a crash on someone else's computer.
+            includeAllModules = true
+            windows {
+                iconFile.set(rootProject.file("scripts/yumi.ico"))
+                upgradeUuid = "80eb9d2a-572b-40d7-a735-fb3483246b50"
+            }
         }
     }
 }

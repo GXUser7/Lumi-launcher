@@ -8,3 +8,4 @@ local.properties
 
 # A personal API key someone keeps next to the code; never to be committed.
 Key.txt
+dist/
