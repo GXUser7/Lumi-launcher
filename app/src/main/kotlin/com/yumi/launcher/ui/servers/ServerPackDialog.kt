@@ -15,6 +15,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,57 +31,160 @@ import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.ModHints
 import com.yumi.launcher.core.ServerPacks
 import com.yumi.launcher.core.ServerPlan
+import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
+import com.yumi.launcher.data.PackCheck
 import com.yumi.launcher.data.PingState
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.ModalCard
 import com.yumi.launcher.ui.components.PackIcons
+import com.yumi.launcher.ui.home.ServerPackTarget
 import com.yumi.launcher.ui.packs.ImportProgress
 import com.yumi.launcher.ui.packs.countOf
 import kotlin.math.absoluteValue
 
 /**
- * A pack for a server in the quick-join list, from what its ping gave away: the host's own pack
- * when the server runs in Yumi Launcher, mods found by their ids for Forge, only the game version
- * and loader otherwise. "Создать" installs it and makes it the pack that server is joined with.
+ * A pack for a server, from what its ping gave away: the host's own pack when the server runs in
+ * Yumi Launcher, mods found by their ids for Forge, only the game version and loader otherwise.
+ * The server is one in the quick-join list — the new pack becomes the one it is joined with — or
+ * the one a friend is on, when "Зайти к другу" found no pack here like the host's: then the pack
+ * is downloaded and the game goes straight in, or goes in as things are ([onJoin]).
  */
 @Composable
-internal fun ServerPackDialog(model: LauncherModel, serverId: String, onClose: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val server = model.quickJoin[serverId]
-    val result = (model.quickJoin.pings[serverId] as? PingState.Online)?.result
+internal fun ServerPackDialog(model: LauncherModel, target: ServerPackTarget, onJoin: (Instance?, String) -> Unit, onClose: () -> Unit) {
     val imports = model.packImports
-    var plan by remember(serverId) { mutableStateOf<ServerPlan?>(null) }
-    var error by remember(serverId) { mutableStateOf<String?>(null) }
-    var installing by remember(serverId) { mutableStateOf(false) }
-    val finishedBefore = remember(serverId) { imports.finished }
-    LaunchedEffect(serverId, result) {
-        plan = null
-        error = null
+    when (target) {
+        is ServerPackTarget.Saved -> {
+            val server = model.quickJoin[target.id]
+            if (server == null) {
+                LaunchedEffect(Unit) { onClose() }
+                return
+            }
+            PackForServer(
+                model,
+                target,
+                title = "Сборка под «${server.name}»",
+                about = null,
+                ping = model.quickJoin.pings[server.id],
+                offline = "Сервер сейчас не отвечает — обновите список и попробуйте ещё раз",
+                origin = "server:${server.id}",
+                known = null,
+                found = null,
+                installLabel = "Создать сборку",
+                anyway = null,
+                onDone = { onClose() },
+                onClose = onClose,
+            ) { plan, origin ->
+                imports.installForServer(server.name, origin, plan, iconFor(server.name)) { made ->
+                    model.quickJoin[server.id]?.let { model.quickJoin.update(it.copy(packId = made.id)) }
+                }
+            }
+        }
+        is ServerPackTarget.Friend -> {
+            val servers = model.friends.servers
+            val check = servers.checks[target.address]
+            val own = model.instances[target.packId]
+            val about = if (check == PackCheck.Checking) {
+                "${target.friend} играет на ${target.address}. Смотрим, есть ли у вас сборка как у хозяина этого сервера…"
+            } else {
+                "${target.friend} играет на ${target.address}, а сборки как у хозяина этого сервера у вас нет. " +
+                    (own?.let { "Можно скачать её отдельной сборкой «${target.name}» или зайти так, с «${it.name}»." } ?: "Скачайте её отдельной сборкой «${target.name}».")
+            }
+            PackForServer(
+                model,
+                target,
+                title = "Сборка для игры с ${target.friend}",
+                about = about,
+                ping = servers.pings[target.address],
+                offline = "Сервер друга сейчас не отвечает — попробуйте чуть позже",
+                origin = "friend:${target.address}",
+                known = (check as? PackCheck.Missing)?.plan,
+                found = (check as? PackCheck.Ready)?.let { model.instances[it.packId] },
+                installLabel = "Скачать и зайти",
+                anyway = own?.let { pack -> { onJoin(pack, target.address); onClose() } },
+                onDone = { pack ->
+                    onJoin(pack, target.address)
+                    onClose()
+                },
+                onClose = onClose,
+            ) { plan, origin -> imports.installForServer(target.name, origin, plan, iconFor(target.name)) }
+        }
+    }
+}
+
+private fun iconFor(name: String) = name.hashCode().absoluteValue % PackIcons.size
+
+/**
+ * [known] is a plan already made from this ping, as the friends card has one; [install] starts the
+ * import under [origin], and [onDone] gets the pack it made — or [found], a pack here that turned
+ * out to fit after all. [anyway], when there is one, is the way past without a new pack.
+ */
+@Composable
+private fun PackForServer(
+    model: LauncherModel,
+    target: ServerPackTarget,
+    title: String,
+    about: String?,
+    ping: PingState?,
+    offline: String,
+    origin: String,
+    known: ServerPlan?,
+    found: Instance?,
+    installLabel: String,
+    anyway: (() -> Unit)?,
+    onDone: (Instance) -> Unit,
+    onClose: () -> Unit,
+    install: (ServerPlan, String) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val result = (ping as? PingState.Online)?.result
+    val hints = result?.mods
+    val imports = model.packImports
+    var plan by remember(target) { mutableStateOf(known) }
+    // What the plan was made from: a new ping that says the same about the mods needs no new plan.
+    var madeFrom by remember(target) { mutableStateOf(if (known != null) hints else null) }
+    var error by remember(target) { mutableStateOf<String?>(null) }
+    var installing by remember(target) { mutableStateOf(false) }
+    val finishedBefore = remember(target) { imports.finished }
+    LaunchedEffect(target, hints, result == null) {
         if (result == null) {
-            error = "Сервер сейчас не отвечает — обновите список и попробуйте ещё раз"
+            // Still on its way, or gone quiet: a plan already made still holds.
+            if (plan == null && ping !is PingState.Loading) error = offline
             return@LaunchedEffect
         }
+        if (plan != null && madeFrom == hints) return@LaunchedEffect
+        plan = null
+        error = null
         runCatching { ServerPacks.plan(result, model.lookup, model.settings.curseForgeKey) }
-            .onSuccess { plan = it }
+            .onSuccess {
+                plan = it
+                madeFrom = hints
+            }
             .onFailure { error = it.message ?: "Не удалось разобраться, что нужно серверу" }
     }
-    // Done once the pack this dialog started is in; it is already the server's pack by then.
+    // Done once the pack this dialog started is in.
     LaunchedEffect(imports.finished) {
-        if (installing && imports.finished != null && imports.finished != finishedBefore) onClose()
+        val made = imports.finished
+        if (installing && made != null && made != finishedBefore) onDone(made)
     }
-    if (server == null) {
-        LaunchedEffect(Unit) { onClose() }
-        return
+    LaunchedEffect(found) {
+        if (found != null && !installing) onDone(found)
     }
     ModalCard(width = 520.dp) {
-        Text("Сборка под «${server.name}»", style = MaterialTheme.typography.headlineSmall)
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+        about?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
         val ready = plan
         when {
             error != null -> {
                 Text(error.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = scheme.error)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onClose) { Text("Закрыть") } }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onClose) { Text("Закрыть") }
+                    if (anyway != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = anyway, shapes = ButtonDefaults.shapes()) { Text("Зайти так") }
+                    }
+                }
             }
             ready == null -> Row(verticalAlignment = Alignment.CenterVertically) {
                 LoadingIndicator(Modifier.size(36.dp))
@@ -110,23 +214,27 @@ internal fun ServerPackDialog(model: LauncherModel, serverId: String, onClose: (
                         Hint("С ключом CurseForge в настройках найдётся больше.")
                     }
                 }
-                if (imports.busy && imports.origin == "server:$serverId") {
+                if (imports.busy && imports.origin == origin) {
                     ImportProgress(model, Modifier.fillMaxWidth())
                 } else {
                     if (installing) imports.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.error) }
                     if (imports.busy) Hint("Сейчас ставится другая сборка — дождитесь её.")
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = onClose) { Text("Отмена") }
+                        if (anyway != null) {
+                            Spacer(Modifier.width(8.dp))
+                            OutlinedButton(onClick = anyway, shapes = ButtonDefaults.shapes()) { Text("Зайти так") }
+                        }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
                                 installing = true
                                 imports.error = null
-                                imports.installForServer(server, ready, server.name.hashCode().absoluteValue % PackIcons.size)
+                                install(ready, origin)
                             },
                             enabled = !imports.busy,
                             shapes = ButtonDefaults.shapes(),
-                        ) { Text("Создать сборку") }
+                        ) { Text(installLabel) }
                     }
                 }
             }

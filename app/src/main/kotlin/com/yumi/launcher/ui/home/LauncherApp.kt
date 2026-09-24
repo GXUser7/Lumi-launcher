@@ -192,11 +192,12 @@ fun FrameWindowScope.LauncherApp(
                     hidden = settings.friendsHidden,
                     onHiddenChange = { settings.friendsHidden = it },
                     onJoin = { pack, address -> play(pack, address) },
+                    onServerPack = { state.serverPack = it },
                 )
             }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
-            state.serverPack?.let { ServerPackDialog(model, it, onClose = { state.serverPack = null }) }
+            state.serverPack?.let { ServerPackDialog(model, it, onJoin = { pack, address -> play(pack, address) }, onClose = { state.serverPack = null }) }
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
             ResizeEdges(windowState)
         }

@@ -39,7 +39,7 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
     /** The pack the last import made, until the screen has shown it. */
     var finished by mutableStateOf<Instance?>(null)
 
-    /** Where the running import came from: "Modrinth:<project id>", or the file's path. */
+    /** Where the running import came from: "Modrinth:<project id>", "server:<quick-join id>", "friend:<address>", or the file's path. */
     var origin by mutableStateOf<String?>(null)
         private set
 
@@ -61,12 +61,13 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
     }
 
     /**
-     * A pack for [server] from what its ping gave away ([plan]): the game, the loader and the mods
-     * found for it. It becomes the pack that server is joined with.
+     * A pack called [name] for a server, from what its ping gave away ([plan]): the game, the
+     * loader and the mods found for it. [from] tells whose server it is, like [origin]; [onDone]
+     * gets the pack once it is in — the quick-join list makes it the one that server is joined with.
      */
-    internal fun installForServer(server: SavedServer, plan: ServerPlan, icon: Int) = start(server.name, "server:${server.id}") {
+    internal fun installForServer(name: String, from: String, plan: ServerPlan, icon: Int, onDone: (Instance) -> Unit = {}) = start(name, from) {
         val instances = model.instances
-        val pack = instances.create(server.name, plan.minecraft, icon)
+        val pack = instances.create(name, plan.minecraft, icon)
         try {
             instances.save(pack.copy(loader = plan.loader, loaderVersion = plan.loaderVersion))
             stage = "Скачиваем моды"
@@ -78,7 +79,7 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
             report(1f)
             instances[pack.id]?.let {
                 model.select(it)
-                model.quickJoin[server.id]?.let { saved -> model.quickJoin.update(saved.copy(packId = it.id)) }
+                onDone(it)
                 finished = it
             }
         } catch (e: Throwable) {

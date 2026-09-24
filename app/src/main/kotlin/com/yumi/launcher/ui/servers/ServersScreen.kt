@@ -83,6 +83,7 @@ import com.yumi.launcher.ui.components.Label
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.home.LauncherState
+import com.yumi.launcher.ui.home.ServerPackTarget
 import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
@@ -135,7 +136,7 @@ fun ServersScreen(model: LauncherModel, state: LauncherState, onJoin: (Instance?
                         },
                     )
                 } else {
-                    QuickJoinPane(model, onJoin, onServerPack = { state.serverPack = it.id })
+                    QuickJoinPane(model, onJoin, onServerPack = { state.serverPack = ServerPackTarget.Saved(it.id) })
                 }
             }
         }

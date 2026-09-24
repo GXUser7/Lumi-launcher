@@ -41,6 +41,17 @@ sealed interface PackRequest {
     data class Edit(val id: String) : PackRequest
 }
 
+/** A server a pack is being made for: one in the quick-join list, or the one a friend is playing on. */
+sealed interface ServerPackTarget {
+    data class Saved(val id: String) : ServerPackTarget
+
+    /**
+     * On the way to a friend: [name] is what the new pack is called — the friend's own pack's
+     * name, when they share it — and [packId] the pack to go in with instead, as things are.
+     */
+    data class Friend(val friend: String, val address: String, val name: String, val packId: String?) : ServerPackTarget
+}
+
 /** The servers screen's two halves: servers this computer runs, and other people's to join. */
 enum class ServersTab(val label: String) { Hosted("Мои серверы"), QuickJoin("Быстрый вход") }
 
@@ -73,8 +84,8 @@ class LauncherState {
     /** The Ely.by sign-in form is over the window. */
     var elySignIn by mutableStateOf(false)
 
-    /** The quick-join server whose pack is being made, over the window. */
-    var serverPack by mutableStateOf<String?>(null)
+    /** The server whose pack is being made, over the window. */
+    var serverPack by mutableStateOf<ServerPackTarget?>(null)
 
     fun openPacks(request: PackRequest? = null) {
         packRequest = request
