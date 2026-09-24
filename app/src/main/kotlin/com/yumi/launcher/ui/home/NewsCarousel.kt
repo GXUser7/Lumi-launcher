@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -21,17 +20,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Extension
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.LocalFlorist
+import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,12 +36,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.yumi.launcher.ui.components.Tip
-import com.yumi.launcher.ui.theme.glass
 
 private class NewsItem(val tag: String, val title: String, val icon: ImageVector, val container: Color, val content: Color)
 
@@ -54,9 +48,9 @@ private val Widths = listOf(360.dp, 180.dp, 84.dp)
 
 /**
  * News as a hero carousel. Choosing a card grows it into the hero and the other two shrink along
- * behind it; only the hero shows its text, the others are colour and a glyph. The arrow by the
- * header folds the cards away — the header stays, to bring them back — and the choice is kept
- * between launches.
+ * behind it; only the hero shows its text, the others are colour and a glyph. The header folds the
+ * cards away into a pill in the corner that shows the hero's headline and brings them back; the
+ * choice is kept between launches.
  */
 @Composable
 fun NewsCarousel(selected: Int, onSelect: (Int) -> Unit, hidden: Boolean, onHiddenChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
@@ -66,26 +60,26 @@ fun NewsCarousel(selected: Int, onSelect: (Int) -> Unit, hidden: Boolean, onHidd
         NewsItem("Сборки", "Вишнёвый сезон: уютные сборки", Icons.Rounded.LocalFlorist, scheme.tertiaryContainer, scheme.onTertiaryContainer),
         NewsItem("Серверы", "Сервер недели", Icons.Rounded.Dns, scheme.secondaryContainer, scheme.onSecondaryContainer),
     )
-    // As wide as the cards, so the header keeps its place when they fold away and only drops down.
-    Column(modifier.width(Widths.fold(0.dp) { sum, it -> sum + it } + 16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(onClick = {}, shape = CircleShape, color = Color.Transparent, modifier = Modifier.glass(CircleShape)) {
-                Row(Modifier.height(40.dp).padding(start = 16.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Новости и события", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(20.dp))
+    // The pill keeps to the corner: open, it sits over the cards' right edge; folded, it drops down there.
+    Column(modifier, horizontalAlignment = Alignment.End) {
+        val hero = items[selected.coerceIn(items.indices)]
+        FoldPill(
+            hidden = hidden,
+            onHiddenChange = onHiddenChange,
+            label = if (hidden) "Показать новости" else "Скрыть новости",
+            opensUp = true,
+            open = {
+                Icon(Icons.Rounded.Newspaper, null, Modifier.size(20.dp))
+                Text("Новости и события", style = MaterialTheme.typography.titleSmall)
+            },
+            folded = {
+                FoldTile(hero.container) { Icon(hero.icon, null, Modifier.size(20.dp), tint = hero.content) }
+                Column {
+                    Text("Новости · ${hero.tag}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                    Text(hero.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))
                 }
-            }
-            val label = if (hidden) "Показать новости" else "Скрыть новости"
-            val turn by animateFloatAsState(if (hidden) 180f else 0f, spring(dampingRatio = 0.7f, stiffness = 300f))
-            Tip(label) {
-                IconButton(
-                    onClick = { onHiddenChange(!hidden) },
-                    shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.size(40.dp).glass(CircleShape),
-                ) { Icon(Icons.Rounded.KeyboardArrowDown, label, Modifier.rotate(turn)) }
-            }
-        }
+            },
+        )
         AnimatedVisibility(
             !hidden,
             enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 300f), expandFrom = Alignment.Top) + fadeIn(tween(250, delayMillis = 80)),

@@ -11,6 +11,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -54,6 +55,22 @@ internal object Http {
                 .POST(HttpRequest.BodyPublishers.ofString(json))
             headers.forEach { (name, value) -> builder.header(name, value) }
             val request = builder.build()
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() >= 500) throw IOException("HTTP ${response.statusCode()}")
+            response.statusCode() to response.body()
+        }
+    }
+
+    /** A form POST, as OAuth wants it; the status comes back with the body, as in [post]. */
+    suspend fun form(url: String, fields: Map<String, String>): Pair<Int, String> = withContext(Dispatchers.IO) {
+        val body = fields.entries.joinToString("&") { (name, value) ->
+            "${URLEncoder.encode(name, Charsets.UTF_8)}=${URLEncoder.encode(value, Charsets.UTF_8)}"
+        }
+        retry("Не удалось связаться с ${URI.create(url).host}") {
+            val request = request(url)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build()
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() >= 500) throw IOException("HTTP ${response.statusCode()}")
             response.statusCode() to response.body()

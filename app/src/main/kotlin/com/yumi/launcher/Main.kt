@@ -190,7 +190,10 @@ private fun launcher(args: Array<String>) = application {
                     settings.account = AccountKind.Offline
                     shot("home-$suffix", 4000) { state.section = Section.Home }
                     shot("news-hidden-$suffix", 1200) { settings.newsHidden = true }
+                    // Both corners folded away: only the island and the two pills to bring them back.
+                    shot("folded-$suffix", 1200) { settings.friendsHidden = true }
                     settings.newsHidden = false
+                    settings.friendsHidden = false
                     // With friends from a friends server (YUMI_SMOKE_FRIENDS): "Зайти к другу" to a Yumi server without its pack.
                     // Only while there is none here — with one, the dialog would go straight into the game.
                     val friends = smokeModel?.friends
@@ -268,6 +271,11 @@ private fun launcher(args: Array<String>) = application {
                         state.elySignIn = true
                     }
                     state.elySignIn = false
+                    shot("ms-home-$suffix", 1200) { settings.account = AccountKind.Microsoft }
+                    // Asks Microsoft for a real code: the dialog as the player sees it while it waits.
+                    shot("ms-signin-$suffix", 4000) { state.microsoftSignIn = true }
+                    state.microsoftSignIn = false
+                    smokeModel?.microsoft?.cancel()
                     state.serversTab = ServersTab.Hosted
                     state.serverView = ServerView.List
                 }

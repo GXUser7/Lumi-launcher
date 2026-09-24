@@ -11,9 +11,17 @@ import java.util.UUID
 /**
  * Who the game runs as. Offline: a nick and the UUID a server derives from it, with no session
  * behind them. Ely.by: a real session, and [injector] — authlib-injector — pointing the game at
- * Ely.by's account servers instead of Mojang's.
+ * Ely.by's account servers instead of Mojang's. Microsoft: Mojang's own session, with the Xbox
+ * user id in [xuid].
  */
-internal class GameAccount(val name: String, val uuid: String, val accessToken: String, val userType: String, val injector: File? = null) {
+internal class GameAccount(
+    val name: String,
+    val uuid: String,
+    val accessToken: String,
+    val userType: String,
+    val injector: File? = null,
+    val xuid: String = "0",
+) {
     companion object {
         fun offline(nick: String) = GameAccount(nick, GameLauncher.offlineUuid(nick), "0", "legacy")
     }
@@ -67,7 +75,7 @@ internal object GameLauncher {
             // Offline play has no session behind these, and the game accepts that.
             "auth_access_token" to account.accessToken,
             "auth_session" to if (account.accessToken == "0") "0" else "token:${account.accessToken}:${account.uuid}",
-            "auth_xuid" to "0",
+            "auth_xuid" to account.xuid,
             "clientid" to "0",
             "user_type" to account.userType,
             "user_properties" to "{}",

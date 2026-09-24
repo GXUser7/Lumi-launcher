@@ -1,7 +1,6 @@
 package com.yumi.launcher.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,7 +31,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Group
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonAdd
@@ -56,7 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -91,30 +90,18 @@ internal fun FriendsCard(
     // Back on the home screen: the hosts may have changed their mods, the player their packs.
     LaunchedEffect(Unit) { friends.servers.refresh() }
     Column(modifier.width(CARD), horizontalAlignment = Alignment.End) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(shape = CircleShape, color = Color.Transparent, modifier = Modifier.glass(CircleShape)) {
-                Row(Modifier.height(40.dp).padding(start = 14.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Group, null, Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Друзья", style = MaterialTheme.typography.titleSmall)
-                    if (friends.online > 0) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(Modifier.size(8.dp).background(Online, CircleShape))
-                        Spacer(Modifier.width(5.dp))
-                        Text("${friends.online} в сети", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-            val label = if (hidden) "Показать друзей" else "Скрыть друзей"
-            val turn by animateFloatAsState(if (hidden) 180f else 0f, spring(dampingRatio = 0.7f, stiffness = 300f))
-            Tip(label) {
-                IconButton(
-                    onClick = { onHiddenChange(!hidden) },
-                    shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.size(40.dp).glass(CircleShape),
-                ) { Icon(Icons.Rounded.KeyboardArrowDown, label, Modifier.rotate(turn)) }
-            }
-        }
+        FoldPill(
+            hidden = hidden,
+            onHiddenChange = onHiddenChange,
+            label = if (hidden) "Показать друзей" else "Скрыть друзей",
+            opensUp = false,
+            open = {
+                Icon(Icons.Rounded.Group, null, Modifier.size(20.dp))
+                Text("Друзья", style = MaterialTheme.typography.titleSmall)
+                if (friends.online > 0) OnlineCount(friends.online)
+            },
+            folded = { FoldedFriends(model) },
+        )
         AnimatedVisibility(
             !hidden,
             enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 300f), expandFrom = Alignment.Top) + fadeIn(tween(250, delayMillis = 80)),
@@ -138,6 +125,43 @@ internal fun FriendsCard(
 }
 
 private val CARD = 320.dp
+
+@Composable
+private fun OnlineCount(count: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(Modifier.size(8.dp).background(Online, CircleShape))
+        Text("$count в сети", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** The friends card folded to its pill: who is on, at a glance — their faces, or why there are none. */
+@Composable
+private fun RowScope.FoldedFriends(model: LauncherModel) {
+    val friends = model.friends
+    val scheme = MaterialTheme.colorScheme
+    FoldTile(scheme.primaryContainer) { Icon(Icons.Rounded.Group, null, Modifier.size(20.dp), tint = scheme.onPrimaryContainer) }
+    Column {
+        Text("Друзья", style = MaterialTheme.typography.titleSmall)
+        when {
+            !friends.available -> Text("сервер не подключён", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+            !friends.signedIn -> Text("профиль не создан", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+            friends.online > 0 -> OnlineCount(friends.online)
+            else -> Text("никого в сети", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+        }
+    }
+    val faces = friends.view?.friends.orEmpty().filter { it.online }.take(3)
+    if (faces.isNotEmpty()) {
+        // Overlapping, the first on top, each on a disc of the pill's colour so the edges read.
+        Box {
+            faces.forEachIndexed { i, friend ->
+                Box(
+                    Modifier.padding(start = (22 * i).dp).zIndex((faces.size - i).toFloat()).size(34.dp).background(scheme.surface, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { SkinHead(friends.skin(friend.name), 30.dp) }
+            }
+        }
+    }
+}
 
 /** The first visit: a name that is only yours, the player's nick to begin with. */
 @Composable

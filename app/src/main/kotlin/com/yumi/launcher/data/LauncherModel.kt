@@ -60,6 +60,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val servers = ServerManager(this, scope)
     val quickJoin = QuickJoinList(scope)
     val ely = ElyAccount(settings, scope)
+    val microsoft = MicrosoftAccount(settings, scope)
     val packImports = PackImporter(this, scope)
     val friends = FriendsModel(this, scope)
 
@@ -101,7 +102,8 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val playerName: String
         get() = when (settings.account) {
             AccountKind.ElyBy -> ely.session?.name.orEmpty()
-            else -> settings.nick
+            AccountKind.Microsoft -> microsoft.session?.name.orEmpty()
+            AccountKind.Offline -> settings.nick
         }
 
     init {
@@ -147,7 +149,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
         if (settings.gameDir.isBlank()) return withGameFolder { play(onStarted, onExit, pack, join) }
         val instance = pack?.let { instances[it.id] } ?: selected ?: return fail("Сначала создайте сборку")
         when (settings.account) {
-            AccountKind.Microsoft -> return fail("Вход через Microsoft ещё в разработке — выберите «Офлайн» или Ely.by")
+            AccountKind.Microsoft -> if (microsoft.session == null) return fail("Войдите в аккаунт Microsoft")
             AccountKind.ElyBy -> if (ely.session == null) return fail("Войдите в аккаунт Ely.by")
             AccountKind.Offline -> if (!settings.nickValid) return fail("Задайте ник: 3–16 символов, латиница, цифры и _")
         }
@@ -233,7 +235,10 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
         return Loaders.install(instance.loader, instance.version, version, installerJava, instances.folder(instance).resolve("logs").resolve("loader-install.log"))
     }
 
-    /** Who the game runs as: the offline nick, or a checked Ely.by session with authlib-injector. */
+    /**
+     * Who the game runs as: the offline nick, a checked Ely.by session with authlib-injector, or
+     * the licence — a Microsoft session renewed if its token is about to run out.
+     */
     private suspend fun account(): GameAccount = when (settings.account) {
         AccountKind.ElyBy -> {
             status = PlayStatus.Preparing(Stage.Account, 0f)
@@ -241,7 +246,12 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
             val injector = AuthlibInjector.ensure()
             GameAccount(session.name, session.uuid, session.accessToken, "mojang", injector)
         }
-        else -> GameAccount.offline(settings.nick)
+        AccountKind.Microsoft -> {
+            status = PlayStatus.Preparing(Stage.Account, 0f)
+            val session = microsoft.fresh()
+            GameAccount(session.name, session.uuid, session.accessToken, "msa", xuid = session.xuid)
+        }
+        AccountKind.Offline -> GameAccount.offline(settings.nick)
     }
 
     /** Cancels a download, or ends the game — forcibly if it has not closed in five seconds. */

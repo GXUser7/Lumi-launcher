@@ -49,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -114,7 +113,7 @@ fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit) {
             AnimatedContent(settings.account, transitionSpec = { fadeIn(tween(200, delayMillis = 60)) togetherWith fadeOut(tween(80)) }) { kind ->
                 when (kind) {
                     AccountKind.Offline -> NickField(model)
-                    AccountKind.Microsoft -> SoonRow(Icons.Rounded.Key, "Вход через Microsoft", "Лицензионный вход появится в следующих версиях")
+                    AccountKind.Microsoft -> MicrosoftRow(model, onSignIn = { state.microsoftSignIn = true })
                     AccountKind.ElyBy -> ElyRow(model, onSignIn = { state.elySignIn = true })
                 }
             }
@@ -144,38 +143,55 @@ private fun NickField(model: LauncherModel) {
 
 @Composable
 private fun ElyRow(model: LauncherModel, onSignIn: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
     val session = model.ely.session
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().height(72.dp)) {
-        Row(Modifier.padding(start = 12.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (session != null) SkinHead(model.ely.skin, 48.dp) else ShapeTile(Icons.Rounded.Key, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
-            Column(Modifier.weight(1f)) {
-                Text(session?.name ?: "Аккаунт Ely.by", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    if (session != null) "Вход выполнен · скин с ely.by" else "Свой скин и ник, который не займут",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-            if (session != null) {
-                TextButton(onClick = model.ely::signOut, enabled = !model.busy) { Text("Выйти") }
-            } else {
-                Button(onClick = onSignIn, shapes = ButtonDefaults.shapes()) { Text("Войти") }
-            }
-        }
-    }
+    AccountRow(
+        signedIn = session != null,
+        skin = model.ely.skin,
+        title = session?.name ?: "Аккаунт Ely.by",
+        subtitle = if (session != null) "Вход выполнен · скин с ely.by" else "Свой скин и ник, который не займут",
+        busy = model.busy,
+        onSignIn = onSignIn,
+        onSignOut = model.ely::signOut,
+    )
 }
 
 @Composable
-private fun SoonRow(icon: ImageVector, title: String, subtitle: String) {
+private fun MicrosoftRow(model: LauncherModel, onSignIn: () -> Unit) {
+    val session = model.microsoft.session
+    AccountRow(
+        signedIn = session != null,
+        skin = session?.skin,
+        title = session?.name ?: "Аккаунт Microsoft",
+        subtitle = if (session != null) "Лицензия · вход выполнен" else "Лицензия: любые серверы и Realms",
+        busy = model.busy,
+        onSignIn = onSignIn,
+        onSignOut = model.microsoft::signOut,
+    )
+}
+
+/** An account to sign in to: the player's face and name once signed in, a key and a pitch until then. */
+@Composable
+private fun AccountRow(
+    signedIn: Boolean,
+    skin: String?,
+    title: String,
+    subtitle: String,
+    busy: Boolean,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().height(72.dp)) {
-        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ShapeTile(icon, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+        Row(Modifier.padding(start = 12.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (signedIn) SkinHead(skin, 48.dp) else ShapeTile(Icons.Rounded.Key, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (signedIn) {
+                TextButton(onClick = onSignOut, enabled = !busy) { Text("Выйти") }
+            } else {
+                Button(onClick = onSignIn, shapes = ButtonDefaults.shapes()) { Text("Войти") }
             }
         }
     }

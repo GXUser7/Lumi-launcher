@@ -7,6 +7,7 @@ import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.yumi.launcher.core.ElySession
+import com.yumi.launcher.core.MicrosoftSession
 import java.lang.management.ManagementFactory
 import java.util.UUID
 import java.util.prefs.Preferences
@@ -107,6 +108,28 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
             elyAccessToken = value?.accessToken.orEmpty()
             elyUuid = value?.uuid.orEmpty()
             elyName = value?.name.orEmpty()
+        }
+
+    // Microsoft: the refresh token that renews the sign-in, and the game's current token with its profile.
+    private var msRefreshToken by stored("msRefreshToken", "", { it }, { it })
+    private var msAccessToken by stored("msAccessToken", "", { it }, { it })
+    private var msExpiresAt by stored("msExpiresAt", 0L, String::toLongOrNull, Long::toString)
+    private var msUuid by stored("msUuid", "", { it }, { it })
+    private var msName by stored("msName", "", { it }, { it })
+    private var msXuid by stored("msXuid", "", { it }, { it })
+    private var msSkin by stored("msSkin", "", { it }, { it })
+
+    var microsoftSession: MicrosoftSession?
+        get() = if (msRefreshToken.isEmpty() || msName.isEmpty()) null
+        else MicrosoftSession(msRefreshToken, msAccessToken, msExpiresAt, msUuid, msName, msXuid, msSkin.ifEmpty { null })
+        set(value) {
+            msRefreshToken = value?.refreshToken.orEmpty()
+            msAccessToken = value?.accessToken.orEmpty()
+            msExpiresAt = value?.expiresAt ?: 0L
+            msUuid = value?.uuid.orEmpty()
+            msName = value?.name.orEmpty()
+            msXuid = value?.xuid.orEmpty()
+            msSkin = value?.skin.orEmpty()
         }
 
     /** Minecraft's own rule for a player name. */

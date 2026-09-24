@@ -84,6 +84,9 @@ class LauncherState {
     /** The Ely.by sign-in form is over the window. */
     var elySignIn by mutableStateOf(false)
 
+    /** The Microsoft sign-in, with its code to confirm in the browser, is over the window. */
+    var microsoftSignIn by mutableStateOf(false)
+
     /** The server whose pack is being made, over the window. */
     var serverPack by mutableStateOf<ServerPackTarget?>(null)
 

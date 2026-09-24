@@ -183,7 +183,7 @@ fun FrameWindowScope.LauncherApp(
             // Friends in the corner above the news, never under them: the card stops where the news begins.
             AnimatedVisibility(
                 state.section == Section.Home,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 88.dp, end = 16.dp, bottom = if (settings.newsHidden) 72.dp else 282.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 88.dp, end = 16.dp, bottom = if (settings.newsHidden) 84.dp else 282.dp),
                 enter = fadeIn(tween(300, delayMillis = 200)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { -it / 4 },
                 exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { -it / 4 },
             ) {
@@ -197,6 +197,7 @@ fun FrameWindowScope.LauncherApp(
             }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
+            if (state.microsoftSignIn) MicrosoftSignIn(model, onClose = { state.microsoftSignIn = false })
             state.serverPack?.let { ServerPackDialog(model, it, onJoin = { pack, address -> play(pack, address) }, onClose = { state.serverPack = null }) }
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
             ResizeEdges(windowState)
@@ -262,8 +263,13 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
                     .semantics { contentDescription = "Профиль: ${model.playerName.ifBlank { "без ника" }}" },
                 contentAlignment = Alignment.Center,
             ) {
-                if (model.settings.account == AccountKind.ElyBy && model.ely.session != null) SkinHead(model.ely.skin, 40.dp)
-                else Avatar(offline = true, size = 40.dp)
+                val ely = model.ely.session.takeIf { model.settings.account == AccountKind.ElyBy }
+                val microsoft = model.microsoft.session.takeIf { model.settings.account == AccountKind.Microsoft }
+                when {
+                    ely != null -> SkinHead(model.ely.skin, 40.dp)
+                    microsoft != null -> SkinHead(microsoft.skin, 40.dp)
+                    else -> Avatar(offline = true, size = 40.dp)
+                }
             }
         }
         WindowControls(windowState, onClose)
