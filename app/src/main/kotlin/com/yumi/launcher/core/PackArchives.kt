@@ -37,7 +37,7 @@ internal object PackArchives {
             val server = packFolder.resolve("server")
             val index = if (zip.getEntry("modrinth.index.json") != null) index(zip, "modrinth.index.json") else index(zip, "manifest.json")
             val (downloads, shared) = if (zip.getEntry("modrinth.index.json") != null) modrinthFiles(index, game, server)
-                else curseForgeFiles(index, game, key) to emptyList()
+                else curseForgeFiles(index, game, archive.absoluteFile.parentFile, key)
             Http.downloadAll(downloads, onProgress = onProgress)
             for ((from, to) in shared) {
                 to.parentFile.mkdirs()
@@ -111,10 +111,10 @@ internal object PackArchives {
         return jobs to shared
     }
 
-    private suspend fun curseForgeFiles(index: JsonObject, game: File, key: String): List<Download> {
+    private suspend fun curseForgeFiles(index: JsonObject, game: File, manualFolder: File, key: String): Pair<List<Download>, List<Pair<File, File>>> {
         curseForgeInfo(index)
         val refs = index["files"]?.jsonArray.orEmpty().map { it.jsonObject }
-        if (refs.isEmpty()) return emptyList()
+        if (refs.isEmpty()) return emptyList<Download>() to emptyList()
         require(key.isNotBlank()) { "Для сборки CurseForge нужен ключ API в настройках" }
         val ids = refs.map { it.long("fileID") ?: error("Нет ID файла CurseForge") }
         val curse = CurseForge(key)
@@ -122,34 +122,64 @@ internal object PackArchives {
         val records = curse.files(ids)
         val lost = ids.toSet() - records.mapNotNull { it.long("id") }.toSet()
         if (lost.isNotEmpty()) error("CurseForge не нашёл файлы сборки: ${lost.joinToString()}")
-        // Packs carry resource packs and shaders too; each goes to its own folder, not into mods.
-        val classes = curse.mods(records.mapNotNull { it.long("modId") }).associate { it.long("id") to it.long("classId") }
-        val sha1 = { record: JsonObject ->
-            record["hashes"]?.jsonArray.orEmpty().map { it.jsonObject }.firstOrNull { it.long("algo") == 1L }?.str("value")
-        }
-        // Some authors allow downloads only on CurseForge's own site. Modrinth often hosts the very
-        // same file — same SHA-1 — and lets launchers have it.
-        val blocked = records.filter { it.str("downloadUrl") == null }
-        val mirrors = Modrinth.urlsByHash(blocked.mapNotNull(sha1))
-        val stuck = blocked.filter { record -> sha1(record)?.let(mirrors::get) == null }
-        if (stuck.isNotEmpty()) {
-            val names = stuck.joinToString { "«${it.str("displayName") ?: it.str("fileName")}»" }
-            throw IOException("Сборку не поставить: $names автор разрешил скачивать только на сайте CurseForge, а на Modrinth такого файла нет")
-        }
-        return records.map { record ->
+        val projects = curse.mods(records.mapNotNull { it.long("modId") })
+        // Some authors allow downloads only on CurseForge's own site. Modrinth often hosts the
+        // very same file — same SHA-1 — and lets launchers have it.
+        val blocked = records.filter { it.str("downloadUrl").isNullOrBlank() }
+        val mirrors = Modrinth.urlsByHash(blocked.mapNotNull(::curseSha1))
+        return curseForgePlan(records, projects, game, manualFolder, mirrors)
+    }
+
+    /** Kept separate from API calls so routing and manual downloads can be checked offline. */
+    internal fun curseForgePlan(records: List<JsonObject>, projects: List<JsonObject>, game: File,
+        manualFolder: File, mirrors: Map<String, String>): Pair<List<Download>, List<Pair<File, File>>> {
+        val byId = projects.associateBy { it.long("id") }
+        val downloads = mutableListOf<Download>()
+        val copies = mutableListOf<Pair<File, File>>()
+        val missing = mutableListOf<String>()
+        for (record in records) {
             val name = safePath(record.str("fileName") ?: error("Файл CurseForge без имени"))
             require('/' !in name) { "Недопустимое имя файла $name" }
-            val folder = when (classes[record.long("modId")]) {
+            val project = byId[record.long("modId")]
+            // ZIP is not a type: resource packs and shader packs both use it.
+            val folder = when (project?.long("classId")) {
                 12L -> "resourcepacks"
                 6552L -> "shaderpacks"
-                else -> "mods"
+                6L -> "mods"
+                else -> throw IOException("Не удалось определить тип файла «$name» — повторите импорт позже")
             }
-            val hash = sha1(record)
-            // CurseForge's links keep the file name as it is, spaces included.
-            val url = record.str("downloadUrl")?.replace(" ", "%20") ?: mirrors.getValue(hash!!)
-            Download(url, game.resolve(folder).resolve(name), hash, record.long("fileLength"))
+            val target = game.resolve(folder).resolve(name)
+            val hash = curseSha1(record)
+            val size = record.long("fileLength")
+            val url = record.str("downloadUrl")?.takeIf { it.isNotBlank() } ?: mirrors[hash]
+            if (url != null) {
+                // CurseForge's links keep the file name as it is, spaces included.
+                downloads += Download(url.replace(" ", "%20"), target, hash, size)
+                continue
+            }
+            // A manual download must be the exact release, not merely a ZIP with the same name.
+            val local = listOf(target, manualFolder.resolve(folder).resolve(name), manualFolder.resolve(name))
+                .firstOrNull { it.isFile && hash != null && (size == null || it.length() == size) && sha1(it).equals(hash, ignoreCase = true) }
+            if (local != null) {
+                if (local != target) copies += local to target
+                continue
+            }
+            val kind = when (folder) {
+                "resourcepacks" -> "Текстурпак"
+                "shaderpacks" -> "Шейдерпак"
+                else -> "Мод"
+            }
+            val page = project.obj("links")?.str("websiteUrl")?.let { "$it/files/${record.long("id")}" }.orEmpty()
+            missing += "$kind «$name» → $folder. $page"
         }
+        if (missing.isNotEmpty()) throw IOException("CurseForge не выдал ссылки на файлы, а точных копий на Modrinth нет. " +
+            "Скачайте их с сайта и положите без распаковки рядом с архивом сборки в «${manualFolder.absolutePath}», затем повторите импорт. " +
+            "Уже скачанные файлы должны совпадать по SHA-1.\n${missing.joinToString("\n")}")
+        return downloads to copies
     }
+
+    private fun curseSha1(record: JsonObject): String? = record["hashes"]?.jsonArray.orEmpty()
+        .map { it.jsonObject }.firstOrNull { it.long("algo") == 1L }?.str("value")
 
     private fun extract(zip: ZipFile, prefix: String, root: File) {
         val entries = zip.entries().asSequence().filter { !it.isDirectory && it.name.startsWith(prefix) }.toList()
