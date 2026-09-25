@@ -59,16 +59,23 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val mods = ModManager(this, scope)
     val servers = ServerManager(this, scope)
     val quickJoin = QuickJoinList(scope)
-    val ely = ElyAccount(settings, scope)
-    val microsoft = MicrosoftAccount(settings, scope)
+    val ely = ElyAccount(settings, scope) { uuid -> accounts.beforeSignIn(AccountKind.ElyBy, uuid) }
+    val microsoft = MicrosoftAccount(settings, scope) { uuid -> accounts.beforeSignIn(AccountKind.Microsoft, uuid) }
+    val accounts = Accounts(this, scope)
     val packImports = PackImporter(this, scope)
     val friends = FriendsModel(this, scope)
+    val feedback = Feedback(this, scope)
+    val downloads = Downloads(this)
 
     var manifest by mutableStateOf<VersionManifest?>(null)
         private set
     var manifestError by mutableStateOf<String?>(null)
         private set
     var status by mutableStateOf<PlayStatus>(PlayStatus.Idle)
+        private set
+
+    /** The name of the pack the last launch was for — what the downloads list calls the game's files. */
+    var launching by mutableStateOf<String?>(null)
         private set
 
     /**
@@ -158,6 +165,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
         val lookup = lookup
 
         stopping = false
+        launching = instance.name
         job = scope.launch {
             log.clear()
             gameServer = join

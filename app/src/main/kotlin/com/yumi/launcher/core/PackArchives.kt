@@ -19,6 +19,16 @@ internal data class PackInfo(
     val source: ModSource,
 )
 
+/**
+ * A file of a pack left out on import because it could not be had — a resource pack or shader
+ * pack whose author keeps it off launchers: [kind] in words, its file [name], the [folder] it goes
+ * in under the game folder, and its [page] to fetch it from by hand.
+ */
+internal data class SkippedFile(val kind: String, val name: String, val folder: String, val page: String)
+
+/** A CurseForge pack's files: what to download, manual downloads to copy in, and what has to be left out. */
+internal class CursePlan(val downloads: List<Download>, val copies: List<Pair<File, File>>, val skipped: List<SkippedFile>)
+
 /** Imports the two public modpack archive formats into a pack's game and server folders. */
 internal object PackArchives {
     suspend fun inspect(archive: File): PackInfo = withContext(Dispatchers.IO) {
@@ -31,13 +41,16 @@ internal object PackArchives {
         }
     }
 
-    suspend fun install(archive: File, packFolder: File, key: String, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+    /** Installs [archive] into [packFolder]; returns the optional files that had to be left out. */
+    suspend fun install(archive: File, packFolder: File, key: String, onProgress: (Float) -> Unit): List<SkippedFile> = withContext(Dispatchers.IO) {
         ZipFile(archive).use { zip ->
             val game = packFolder.resolve("minecraft")
             val server = packFolder.resolve("server")
             val index = if (zip.getEntry("modrinth.index.json") != null) index(zip, "modrinth.index.json") else index(zip, "manifest.json")
-            val (downloads, shared) = if (zip.getEntry("modrinth.index.json") != null) modrinthFiles(index, game, server)
+            val plan = if (zip.getEntry("modrinth.index.json") != null) modrinthFiles(index, game, server).let { (d, s) -> CursePlan(d, s, emptyList()) }
                 else curseForgeFiles(index, game, archive.absoluteFile.parentFile, key)
+            val downloads = plan.downloads
+            val shared = plan.copies
             Http.downloadAll(downloads, onProgress = onProgress)
             for ((from, to) in shared) {
                 to.parentFile.mkdirs()
@@ -48,7 +61,13 @@ internal object PackArchives {
                 "overrides/" to server, "server-overrides/" to server,
             ) else listOf((index.str("overrides") ?: "overrides").trimEnd('/') + "/" to game)
             for ((prefix, root) in prefixes) extract(zip, prefix, root)
+            plan.skipped
         }
+    }
+
+    /** What installing a CurseForge [archive] would do, asked of CurseForge without downloading anything — for `--pack-test --plan`. */
+    suspend fun planCurseForge(archive: File, packFolder: File, key: String): CursePlan = withContext(Dispatchers.IO) {
+        ZipFile(archive).use { zip -> curseForgeFiles(index(zip, "manifest.json"), packFolder.resolve("minecraft"), archive.absoluteFile.parentFile, key) }
     }
 
     suspend fun installServerArchive(archive: File, packFolder: File) = withContext(Dispatchers.IO) {
@@ -111,10 +130,10 @@ internal object PackArchives {
         return jobs to shared
     }
 
-    private suspend fun curseForgeFiles(index: JsonObject, game: File, manualFolder: File, key: String): Pair<List<Download>, List<Pair<File, File>>> {
+    private suspend fun curseForgeFiles(index: JsonObject, game: File, manualFolder: File, key: String): CursePlan {
         curseForgeInfo(index)
         val refs = index["files"]?.jsonArray.orEmpty().map { it.jsonObject }
-        if (refs.isEmpty()) return emptyList<Download>() to emptyList()
+        if (refs.isEmpty()) return CursePlan(emptyList(), emptyList(), emptyList())
         require(key.isNotBlank()) { "Для сборки CurseForge нужен ключ API в настройках" }
         val ids = refs.map { it.long("fileID") ?: error("Нет ID файла CurseForge") }
         val curse = CurseForge(key)
@@ -130,13 +149,18 @@ internal object PackArchives {
         return curseForgePlan(records, projects, game, manualFolder, mirrors)
     }
 
-    /** Kept separate from API calls so routing and manual downloads can be checked offline. */
+    /**
+     * Kept separate from API calls so routing and manual downloads can be checked offline. A mod
+     * that cannot be had stops the import — the pack would not start without it; a resource pack
+     * or shader pack is only looks, and the pack is installed without it, as [CursePlan.skipped].
+     */
     internal fun curseForgePlan(records: List<JsonObject>, projects: List<JsonObject>, game: File,
-        manualFolder: File, mirrors: Map<String, String>): Pair<List<Download>, List<Pair<File, File>>> {
+        manualFolder: File, mirrors: Map<String, String>): CursePlan {
         val byId = projects.associateBy { it.long("id") }
         val downloads = mutableListOf<Download>()
         val copies = mutableListOf<Pair<File, File>>()
         val missing = mutableListOf<String>()
+        val skipped = mutableListOf<SkippedFile>()
         for (record in records) {
             val name = safePath(record.str("fileName") ?: error("Файл CurseForge без имени"))
             require('/' !in name) { "Недопустимое имя файла $name" }
@@ -170,12 +194,12 @@ internal object PackArchives {
                 else -> "Мод"
             }
             val page = project.obj("links")?.str("websiteUrl")?.let { "$it/files/${record.long("id")}" }.orEmpty()
-            missing += "$kind «$name» → $folder. $page"
+            if (folder == "mods") missing += "$kind «$name» → $folder. $page" else skipped += SkippedFile(kind, name, folder, page)
         }
-        if (missing.isNotEmpty()) throw IOException("CurseForge не выдал ссылки на файлы, а точных копий на Modrinth нет. " +
+        if (missing.isNotEmpty()) throw IOException("CurseForge не выдал ссылки на моды, а точных копий на Modrinth нет. " +
             "Скачайте их с сайта и положите без распаковки рядом с архивом сборки в «${manualFolder.absolutePath}», затем повторите импорт. " +
             "Уже скачанные файлы должны совпадать по SHA-1.\n${missing.joinToString("\n")}")
-        return downloads to copies
+        return CursePlan(downloads, copies, skipped)
     }
 
     private fun curseSha1(record: JsonObject): String? = record["hashes"]?.jsonArray.orEmpty()

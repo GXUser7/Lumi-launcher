@@ -1,7 +1,6 @@
 package com.yumi.launcher.ui.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material3.Button
@@ -40,7 +41,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,9 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,8 +64,6 @@ import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.PlayButton
 import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.components.SkinHead
-import com.yumi.launcher.ui.components.choiceColors
-import com.yumi.launcher.ui.components.connectedShapes
 import kotlinx.coroutines.delay
 
 @Composable
@@ -88,40 +83,92 @@ fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
         )
         Label("Аккаунт")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(androidx.compose.material3.ButtonGroupDefaults.ConnectedSpaceBetween)) {
-            val kinds = AccountKind.entries
-            kinds.forEachIndexed { i, kind ->
-                val checked = settings.account == kind
-                ToggleButton(
-                    checked = checked,
-                    onCheckedChange = { settings.account = kind; model.dismissError() },
-                    shapes = connectedShapes(i, kinds.size),
-                    colors = choiceColors(),
-                    modifier = Modifier.weight(1f).height(48.dp).semantics { role = Role.RadioButton },
-                ) {
-                    AnimatedVisibility(checked) {
-                        Row {
-                            Icon(Icons.Rounded.Check, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                        }
-                    }
-                    Text(kind.label, style = type.labelLarge)
-                }
-            }
-        }
+        Box(Modifier.guide(state, GuideAnchor.Account)) { AccountSelector(model, state) }
         Box(Modifier.fillMaxWidth().height(80.dp)) {
             AnimatedContent(settings.account, transitionSpec = { fadeIn(tween(200, delayMillis = 60)) togetherWith fadeOut(tween(80)) }) { kind ->
-                when (kind) {
-                    AccountKind.Offline -> NickField(model)
-                    AccountKind.Microsoft -> MicrosoftRow(model, onSignIn = { state.microsoftSignIn = true })
-                    AccountKind.ElyBy -> ElyRow(model, onSignIn = { state.elySignIn = true })
+                when {
+                    kind == AccountKind.Offline -> NickField(model)
+                    kind == AccountKind.Microsoft && model.microsoft.session == null -> MicrosoftRow(model, onSignIn = { state.microsoftSignIn = true })
+                    kind == AccountKind.ElyBy && model.ely.session == null -> ElyRow(model, onSignIn = { state.elySignIn = true })
+                    else -> SignedIn(model, kind)
                 }
             }
         }
         Label("Сборка")
-        PackSelector(model, state)
+        Box(Modifier.guide(state, GuideAnchor.Pack)) { PackSelector(model, state) }
         Spacer(Modifier.weight(1f))
-        PlayRow(model, state, onPlay)
+        Box(Modifier.guide(state, GuideAnchor.Play)) { PlayRow(model, state, onPlay) }
+    }
+}
+
+/**
+ * The account the game starts with — its face, name and kind — and, under it, every other
+ * account and the ways to add one: several of each kind, switched in one click.
+ */
+@Composable
+private fun AccountSelector(model: LauncherModel, state: LauncherState) {
+    val scheme = MaterialTheme.colorScheme
+    val settings = model.settings
+    val all = model.accounts.all
+    val active = all.firstOrNull { it.active }
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            onClick = { open = true },
+            shape = RoundedCornerShape(22.dp),
+            color = scheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth().height(68.dp),
+        ) {
+            Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (active != null) AccountFace(active.kind, active.skin, 48.dp)
+                else ShapeTile(Icons.Rounded.Person, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        active?.name ?: when (settings.account) {
+                            AccountKind.Offline -> "Новый офлайн-ник"
+                            AccountKind.Microsoft -> "Microsoft: войдите"
+                            AccountKind.ElyBy -> "Ely.by: войдите"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val others = all.size - (if (active != null) 1 else 0)
+                    Text(
+                        accountKindLine(settings.account) + if (others > 0) " · ещё ${others}" else "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                Icon(Icons.Rounded.UnfoldMore, "Сменить аккаунт", tint = scheme.onSurfaceVariant)
+            }
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
+            AccountMenuItems(model, state, onDone = { open = false })
+        }
+    }
+}
+
+/** A signed-in Microsoft or Ely.by account: what it gives, and signing out of it. */
+@Composable
+private fun SignedIn(model: LauncherModel, kind: AccountKind) {
+    val scheme = MaterialTheme.colorScheme
+    val entry = model.accounts.all.firstOrNull { it.active }
+    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().height(72.dp)) {
+        Row(Modifier.padding(start = 12.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ShapeTile(if (kind == AccountKind.Microsoft) Icons.Rounded.VerifiedUser else Icons.Rounded.Key, scheme.primaryContainer, scheme.onPrimaryContainer, 44.dp)
+            Column(Modifier.weight(1f)) {
+                Text("Вход выполнен", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (kind == AccountKind.Microsoft) "Лицензия: любые серверы и Realms" else "Скин с ely.by и ник, который не займут",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+            TextButton(onClick = { entry?.let(model.accounts::remove) }, enabled = !model.busy && entry != null) { Text("Выйти") }
+        }
     }
 }
 
@@ -284,7 +331,14 @@ private fun PlayRow(model: LauncherModel, state: LauncherState, onPlay: () -> Un
                 when (status) {
                     is PlayStatus.Preparing -> Caption("${status.stage.label} · ${(status.fraction * 100).toInt()}%  ·  нажмите, чтобы отменить")
                     is PlayStatus.Running -> Caption("${elapsed(status.since)} · нажмите, чтобы остановить")
-                    is PlayStatus.Failed -> Text(status.message, style = MaterialTheme.typography.bodySmall, color = scheme.error, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    is PlayStatus.Failed -> {
+                        Text(status.message, style = MaterialTheme.typography.bodySmall, color = scheme.error, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        TextButton(
+                            onClick = { model.feedback.open = true; model.feedback.sendLog() },
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                            modifier = Modifier.height(32.dp),
+                        ) { Text("Отправить лог разработчику", style = MaterialTheme.typography.labelMedium) }
+                    }
                     PlayStatus.Idle -> Caption(selected?.let { lastPlayed(it) } ?: "Сначала создайте сборку")
                 }
             }

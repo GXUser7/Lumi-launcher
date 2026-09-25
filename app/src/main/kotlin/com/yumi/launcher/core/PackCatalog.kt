@@ -44,15 +44,16 @@ internal data class PackRelease(
  * the picker can offer every version the pack was made for.
  */
 internal object PackCatalog {
-    suspend fun search(source: ModSource, query: String, version: String, loader: Loader?, key: String): List<PackHit> = when (source) {
+    suspend fun search(source: ModSource, query: String, version: String, loader: Loader?, key: String, filter: SearchFilter = SearchFilter()): List<PackHit> = when (source) {
         ModSource.Modrinth -> {
             val facets = buildList {
                 add("[\"project_type:modpack\"]")
                 if (version.isNotBlank()) add("[\"versions:$version\"]")
                 if (loader != null && loader != Loader.Vanilla) add("[\"categories:${loader.name.lowercase()}\"]")
+                filter.categories.values.forEach { add("[\"categories:$it\"]") }
             }.joinToString(",", "[", "]")
-            val url = "https://api.modrinth.com/v2/search?query=${enc(query)}&facets=${enc(facets)}&limit=30" +
-                if (query.isBlank()) "&index=downloads" else ""
+            val index = if (filter.sort == SortOrder.Relevance && query.isBlank()) "downloads" else filter.sort.modrinth
+            val url = "https://api.modrinth.com/v2/search?query=${enc(query)}&facets=${enc(facets)}&limit=30&index=$index"
             LauncherJson.parseToJsonElement(Http.text(url)).jsonObject["hits"]!!.jsonArray.map { element ->
                 val o = element.jsonObject
                 PackHit(
@@ -73,7 +74,9 @@ internal object PackCatalog {
             val url = "https://api.curseforge.com/v1/mods/search?gameId=432&classId=4471&searchFilter=${enc(query)}" +
                 (if (version.isBlank()) "" else "&gameVersion=${enc(version)}") +
                 (if (loader == null || loader == Loader.Vanilla) "" else "&modLoaderType=${curseLoader(loader)}") +
-                "&sortField=6&sortOrder=desc&pageSize=30"
+                (filter.categories["categories"]?.let { "&categoryId=$it" }.orEmpty()) +
+                // Modpacks were always listed by downloads here; "relevance" keeps that.
+                "&sortField=${if (filter.sort == SortOrder.Relevance) 6 else filter.sort.curse}&sortOrder=desc&pageSize=30"
             CurseForge.get(url, key)["data"]!!.jsonArray.map { element ->
                 val o = element.jsonObject
                 val latest = o["latestFilesIndexes"]?.jsonArray.orEmpty().map { it.jsonObject }

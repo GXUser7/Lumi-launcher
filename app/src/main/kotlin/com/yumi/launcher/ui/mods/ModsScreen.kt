@@ -41,7 +41,10 @@ import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.Texture
 import androidx.compose.material.icons.rounded.Update
+import androidx.compose.material.icons.rounded.ViewInAr
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
@@ -59,6 +62,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,16 +71,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.core.ContentType
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.SearchFilter
 import com.yumi.launcher.core.ModDetails
 import com.yumi.launcher.core.ModHit
 import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ModEntry
+import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.CurseForgeKeyPrompt
+import com.yumi.launcher.ui.home.FilterPanel
+import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.RemoteIcon
@@ -91,12 +101,13 @@ import java.net.URI
 private enum class Tab(val label: String) { Catalog("Каталог"), Installed("Установлено") }
 
 /**
- * Mods for one pack: the Modrinth or CurseForge catalogue, filtered to the pack's game version and
- * loader, and the pack's own mods folder. A vanilla pack gets pointed at its settings instead —
- * mods need a loader, and the choice of one belongs to the pack.
+ * Mods, shaders and resource packs for one pack: the Modrinth or CurseForge catalogue, filtered to
+ * the pack's game version and loader and by the catalogue's own categories, and the pack's own
+ * folders. A vanilla pack gets pointed at its settings for mods and shaders — they need a loader,
+ * and the choice of one belongs to the pack; resource packs work in any.
  */
 @Composable
-fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
+fun ModsScreen(model: LauncherModel, state: LauncherState, onEditPack: (Instance) -> Unit) {
     val mods = model.mods
     var packId by remember { mutableStateOf(model.selected?.id) }
     val pack = model.instances[packId] ?: model.selected
@@ -108,9 +119,10 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
         selectedHit = null
         if (pack == null) return@LaunchedEffect
         mods.refresh(pack)
-        if (pack.loader != Loader.Vanilla) mods.search(pack)
+        if (mods.searchable(pack)) mods.search(pack)
     }
-    LaunchedEffect(mods.query, mods.source, pack?.id) { catalogList.scrollToItem(0) }
+    LaunchedEffect(mods.source, mods.type) { mods.loadCategories() }
+    LaunchedEffect(mods.query, mods.source, mods.type, mods.filter, pack?.id) { catalogList.scrollToItem(0) }
 
     AnimatedContent(
         targetState = selectedHit?.takeIf { pack != null },
@@ -118,13 +130,14 @@ fun ModsScreen(model: LauncherModel, onEditPack: (Instance) -> Unit) {
         transitionSpec = { fadeIn(tween(200, delayMillis = 70)) togetherWith fadeOut(tween(70)) },
     ) { hit ->
         if (hit != null && pack != null) ModDetail(model, pack, hit, onBack = { selectedHit = null })
-        else ModsList(model, pack, tab, { tab = it }, catalogList, onPickPack = { packId = it.id }, onEditPack = onEditPack, onOpen = { selectedHit = it })
+        else ModsList(model, state, pack, tab, { tab = it }, catalogList, onPickPack = { packId = it.id }, onEditPack = onEditPack, onOpen = { selectedHit = it })
     }
 }
 
 @Composable
 private fun ModsList(
     model: LauncherModel,
+    state: LauncherState,
     pack: Instance?,
     tab: Tab,
     onTab: (Tab) -> Unit,
@@ -134,14 +147,20 @@ private fun ModsList(
     onOpen: (ModHit) -> Unit,
 ) {
     val mods = model.mods
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Моды", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
+            AnimatedContent(mods.type, Modifier.weight(1f), transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(80)) }) { type ->
+                Text(type.label, style = MaterialTheme.typography.displaySmall)
+            }
             PackPicker(model, pack, onPickPack)
         }
+        ChoiceGroup(KINDS, mods.type, { it.label }, { mods.show(pack, it) }, height = 44.dp) { kind ->
+            Icon(kindIcon(kind), null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+        }
         when {
-            pack == null -> Hint("Сначала создайте сборку — моды ставятся в неё.")
-            pack.loader == Loader.Vanilla -> NeedsLoader(pack) { onEditPack(pack) }
+            pack == null -> Hint("Сначала создайте сборку — моды, шейдеры и ресурспаки ставятся в неё.")
+            !mods.searchable(pack) -> NeedsLoader(pack, mods.type) { onEditPack(pack) }
             else -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                     Tab.entries.forEachIndexed { i, t ->
@@ -150,12 +169,12 @@ private fun ModsList(
                             onCheckedChange = { onTab(t) },
                             shapes = connectedShapes(i, Tab.entries.size),
                             colors = choiceColors(),
-                            modifier = Modifier.weight(1f).height(44.dp),
+                            modifier = Modifier.weight(1f).height(40.dp),
                         ) { Text(if (t == Tab.Installed) "${t.label} · ${mods.installed.size}" else t.label, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
                 mods.notice?.let { Notice(it) { mods.notice = null } }
-                if (tab == Tab.Catalog) Catalog(model, pack, catalogList, onOpen) else Installed(model, pack)
+                if (tab == Tab.Catalog) Catalog(model, state, pack, catalogList, onOpen) else Installed(model, pack)
             }
         }
     }
@@ -188,34 +207,91 @@ private fun PackPicker(model: LauncherModel, pack: Instance?, onPick: (Instance)
     }
 }
 
+/** What the screen lists, in the order of its switch; modpacks have their own screen. */
+private val KINDS = listOf(ContentType.Mod, ContentType.Shader, ContentType.ResourcePack)
+
+private fun kindIcon(kind: ContentType) = when (kind) {
+    ContentType.Shader -> Icons.Rounded.WbSunny
+    ContentType.ResourcePack -> Icons.Rounded.Texture
+    else -> Icons.Rounded.Extension
+}
+
 @Composable
-private fun NeedsLoader(pack: Instance, onEdit: () -> Unit) {
+private fun NeedsLoader(pack: Instance, kind: ContentType, onEdit: () -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Нужен загрузчик модов", style = MaterialTheme.typography.titleLarge)
-            Hint("«${pack.name}» — ванильная сборка. Выберите для неё Fabric, NeoForge, Forge или Quilt: моды пишутся под конкретный загрузчик, и каталог покажет подходящие.")
+            Hint(
+                if (kind == ContentType.Shader) {
+                    "«${pack.name}» — ванильная сборка. Шейдеры запускает мод Iris, а ему нужен загрузчик: выберите для сборки Fabric — лаунчер сам предложит поставить Iris."
+                } else {
+                    "«${pack.name}» — ванильная сборка. Выберите для неё Fabric, NeoForge, Forge или Quilt: моды пишутся под конкретный загрузчик, и каталог покажет подходящие."
+                },
+            )
             Button(onClick = onEdit, shapes = ButtonDefaults.shapes()) { Text("Выбрать загрузчик") }
         }
     }
 }
 
+/** Shaders need Iris — Oculus on Forge — in the pack; one button puts it there. */
 @Composable
-private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListState, onOpen: (ModHit) -> Unit) {
+private fun ShaderLoaderCard(model: LauncherModel, pack: Instance) {
+    val mods = model.mods
+    val scheme = MaterialTheme.colorScheme
+    val name = if (pack.loader == Loader.Forge) "Oculus" else "Iris"
+    val installing = mods.installing.containsKey("${ModSource.Modrinth}:${name.lowercase()}")
+    Surface(shape = RoundedCornerShape(22.dp), color = scheme.tertiaryContainer, contentColor = scheme.onTertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Шейдерам нужен $name", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Мод, который загружает шейдеры${if (name == "Iris") ", вместе с Sodium" else ""}. Без него игра их не увидит.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = { mods.installShaderLoader(pack) }, enabled = !installing, shapes = ButtonDefaults.shapes()) {
+                if (installing) LoadingIndicator(Modifier.size(20.dp), color = scheme.onPrimary)
+                else Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (installing) "Ставим…" else "Поставить")
+            }
+        }
+    }
+}
+
+@Composable
+private fun Catalog(model: LauncherModel, state: LauncherState, pack: Instance, listState: LazyListState, onOpen: (ModHit) -> Unit) {
     val mods = model.mods
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
+    // The filters live in the panel right of the card while the list is on screen.
+    val panel = remember { FilterPanel(modpacks = false) }
+    panel.version = pack.version
+    DisposableEffect(panel) {
+        state.filters = panel
+        onDispose { if (state.filters === panel) state.filters = null }
+    }
+    if (mods.type == ContentType.Shader) {
+        val ready = remember(pack.id, mods.installing.size, mods.installed.size) { mods.hasShaderLoader(pack) }
+        if (!ready) ShaderLoaderCard(model, pack)
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SearchField(
             value = mods.query,
             onValueChange = { mods.query = it; mods.search(pack, debounce = true) },
-            placeholder = "Поиск: sodium, jei, create…",
+            placeholder = when (mods.type) {
+                ContentType.Shader -> "Поиск: complementary, bsl, photon…"
+                ContentType.ResourcePack -> "Поиск: faithful, fresh animations…"
+                else -> "Поиск: sodium, jei, create…"
+            },
             modifier = Modifier.weight(1f),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
             ModSource.entries.forEachIndexed { i, source ->
                 ToggleButton(
                     checked = mods.source == source,
-                    onCheckedChange = { mods.source = source; mods.search(pack) },
+                    onCheckedChange = { mods.source = source; mods.filter = SearchFilter(anyVersion = mods.filter.anyVersion); mods.search(pack) },
                     shapes = connectedShapes(i, ModSource.entries.size),
                     colors = choiceColors(),
                     contentPadding = PaddingValues(horizontal = 12.dp),
@@ -233,7 +309,7 @@ private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListSta
         items(mods.results, key = { "${it.source}:${it.id}" }) { hit ->
             HitRow(
                 hit,
-                installing = mods.installing["${hit.source}:${hit.id}"] == true,
+                installing = mods.installing.containsKey("${hit.source}:${hit.id}"),
                 installed = mods.isInstalled(hit),
                 onOpen = { onOpen(hit) },
                 onInstall = { mods.install(pack, hit) },
@@ -243,7 +319,13 @@ private fun Catalog(model: LauncherModel, pack: Instance, listState: LazyListSta
             Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                 when {
                     mods.searching -> LoadingIndicator()
-                    mods.results.isEmpty() && mods.searchError == null -> Hint("Ничего не нашлось для ${pack.loader.label} ${pack.version}.")
+                    mods.results.isEmpty() && mods.searchError == null -> Hint(
+                        when {
+                            mods.filter.categories.isNotEmpty() -> "Ничего не нашлось — попробуйте другую категорию или сбросьте фильтры."
+                            mods.type == ContentType.Mod -> "Ничего не нашлось для ${pack.loader.label} ${pack.version}."
+                            else -> "Ничего не нашлось для ${pack.version} — попробуйте «Любая версия»."
+                        },
+                    )
                     mods.more -> TextButton(onClick = { mods.search(pack, append = true) }) { Text("Показать ещё") }
                 }
             }
@@ -256,7 +338,7 @@ private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onOpen:
     val scheme = MaterialTheme.colorScheme
     Surface(onClick = onOpen, shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RemoteIcon(hit.iconUrl, Icons.Rounded.Extension, 52.dp)
+            RemoteIcon(hit.iconUrl, kindIcon(hit.type), 52.dp)
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(hit.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -289,7 +371,7 @@ private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onOpen:
 private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack: () -> Unit) {
     val mods = model.mods
     val scheme = MaterialTheme.colorScheme
-    val installing = mods.installing["${hit.source}:${hit.id}"] == true
+    val installing = mods.installing.containsKey("${hit.source}:${hit.id}")
     val installed = mods.isInstalled(hit)
     val details by produceState<ModDetails?>(null, hit.source, hit.id) { value = mods.details(hit) }
     var loaded by remember(hit.id) { mutableStateOf(false) }
@@ -304,7 +386,7 @@ private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack:
             Surface(shape = RoundedCornerShape(28.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RemoteIcon(hit.iconUrl, Icons.Rounded.Extension, 76.dp)
+                        RemoteIcon(hit.iconUrl, kindIcon(hit.type), 76.dp)
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -335,7 +417,13 @@ private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack:
                             Text("Страница")
                         }
                     }
-                    Hint("Для ${pack.loader.label} ${pack.version}. Нужные ему моды поставятся сами.")
+                    Hint(
+                        when (hit.type) {
+                            ContentType.Shader -> "Для Minecraft ${pack.version}. Встанет в папку shaderpacks и включится, если другой шейдер ещё не выбран."
+                            ContentType.ResourcePack -> "Для Minecraft ${pack.version}. Встанет в папку resourcepacks и сразу включится в игре."
+                            else -> "Для ${pack.loader.label} ${pack.version}. Нужные ему моды поставятся сами."
+                        },
+                    )
                 }
             }
             val info = details
@@ -420,28 +508,32 @@ private fun Installed(model: LauncherModel, pack: Instance) {
     val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
         Hint(
-            if (mods.installed.isEmpty()) "В сборке пока нет модов." else "Выключенный мод остаётся в папке, но игра его не загрузит.",
+            when (mods.type) {
+                ContentType.Shader -> if (mods.installed.isEmpty()) "В сборке пока нет шейдеров." else "Включён может быть один шейдер. В игре они — в «Настройки → Графика → Пакеты шейдеров»."
+                ContentType.ResourcePack -> if (mods.installed.isEmpty()) "В сборке пока нет наборов ресурсов." else "Включённые наборы — в списке игры; их порядок меняется в самой игре."
+                else -> if (mods.installed.isEmpty()) "В сборке пока нет модов." else "Выключенный мод остаётся в папке, но игра его не загрузит."
+            },
             Modifier.weight(1f),
         )
-        OutlinedButton(onClick = { model.openFolder(model.instances.modsDir(pack)) }, shapes = ButtonDefaults.shapes()) {
+        OutlinedButton(onClick = { model.openFolder(mods.dir(pack)) }, shapes = ButtonDefaults.shapes()) {
             Icon(Icons.Outlined.FolderOpen, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Папка модов")
+            Text("Папка")
         }
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(mods.installed, key = { it.file.name }) { entry ->
-            InstalledRow(entry, onToggle = { mods.setEnabled(pack, entry, it) }, onDelete = { mods.delete(pack, entry) })
+            InstalledRow(entry, kindIcon(mods.type), onToggle = { mods.setEnabled(pack, entry, it) }, onDelete = { mods.delete(pack, entry) })
         }
     }
 }
 
 @Composable
-private fun InstalledRow(entry: ModEntry, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+private fun InstalledRow(entry: ModEntry, glyph: ImageVector, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RemoteIcon(entry.meta?.iconUrl, Icons.Rounded.Extension, 44.dp)
+            RemoteIcon(entry.meta?.iconUrl, glyph, 44.dp)
             Column(Modifier.weight(1f)) {
                 Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (entry.enabled) scheme.onSurface else scheme.outline)
                 Text(

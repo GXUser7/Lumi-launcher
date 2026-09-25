@@ -14,7 +14,12 @@ import kotlinx.coroutines.launch
  * The Ely.by account: signing in and out, the two-factor step when the account has one, and a
  * session kept valid for each launch. The session lives in the settings, so it outlasts restarts.
  */
-class ElyAccount(private val settings: LauncherSettings, private val scope: CoroutineScope) {
+class ElyAccount(
+    private val settings: LauncherSettings,
+    private val scope: CoroutineScope,
+    /** Told the new account's uuid just before it takes the Ely.by slot, so the one there can be put away. */
+    private val beforeSignIn: (String) -> Unit = {},
+) {
     var busy by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
@@ -45,6 +50,7 @@ class ElyAccount(private val settings: LauncherSettings, private val scope: Coro
         scope.launch {
             try {
                 val session = ElyBy.authenticate(login, password, code.takeIf { needsCode }, settings.elyClientToken)
+                beforeSignIn(session.uuid)
                 settings.elySession = session
                 needsCode = false
                 loadSkin(session.name)
@@ -91,6 +97,12 @@ class ElyAccount(private val settings: LauncherSettings, private val scope: Coro
             skin = null
             throw ElyRefused("Сессия Ely.by истекла — войдите снова")
         }
+    }
+
+    /** Fetches the face again after another account has taken the slot. */
+    fun refreshSkin() {
+        skin = null
+        session?.let { loadSkin(it.name) }
     }
 
     private fun loadSkin(name: String) {

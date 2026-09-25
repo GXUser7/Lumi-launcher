@@ -12,6 +12,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Agriculture
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Cake
+import androidx.compose.material.icons.rounded.Construction
+import androidx.compose.material.icons.rounded.Cottage
+import androidx.compose.material.icons.rounded.Egg
+import androidx.compose.material.icons.rounded.EmojiNature
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Fort
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.NightsStay
+import androidx.compose.material.icons.rounded.Park
+import androidx.compose.material.icons.rounded.Sailing
+import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Thunderstorm
+import androidx.compose.material.icons.rounded.Volcano
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.graphics.shapes.RoundedPolygon
+import com.yumi.launcher.ui.theme.oklch
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Castle
 import androidx.compose.material.icons.rounded.Diamond
@@ -30,7 +56,6 @@ import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,30 +152,109 @@ val PackIcons: List<ImageVector> = listOf(
     Icons.Rounded.Diamond,
     Icons.Rounded.RocketLaunch,
     Icons.Rounded.Pets,
+    Icons.Rounded.Cottage,
+    Icons.Rounded.Fort,
+    Icons.Rounded.Volcano,
+    Icons.Rounded.Waves,
+    Icons.Rounded.WaterDrop,
+    Icons.Rounded.LocalFireDepartment,
+    Icons.Rounded.AcUnit,
+    Icons.Rounded.WbSunny,
+    Icons.Rounded.NightsStay,
+    Icons.Rounded.Thunderstorm,
+    Icons.Rounded.Park,
+    Icons.Rounded.Agriculture,
+    Icons.Rounded.EmojiNature,
+    Icons.Rounded.Egg,
+    Icons.Rounded.Cake,
+    Icons.Rounded.SportsEsports,
+    Icons.Rounded.Construction,
+    Icons.Rounded.Science,
+    Icons.Rounded.AutoAwesome,
+    Icons.Rounded.Explore,
+    Icons.Rounded.Sailing,
+    Icons.Rounded.Shield,
+    Icons.Rounded.Favorite,
+    Icons.Rounded.Star,
 )
 
-/** A pack's tile keeps the original Glacier colours even when the surrounding theme changes. */
-@Composable
-fun PackTile(icon: Int, size: Dp, modifier: Modifier = Modifier) {
-    val scheme = YumiLightColors
-    val (container, content) = when (icon % 3) {
-        0 -> scheme.primaryContainer to scheme.onPrimaryContainer
-        1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-        else -> scheme.secondaryContainer to scheme.onSecondaryContainer
-    }
-    ShapeTile(PackIcons[icon.coerceIn(0, PackIcons.lastIndex)], container, content, size, modifier)
+/** A tile's colour: the container and the glyph on it. */
+class TileColor(val container: Color, val content: Color)
+
+/**
+ * The colours a pack's tile can take. They do not follow the theme — a pack keeps the colour it was
+ * given whatever palette the launcher wears. The first three are Glacier's containers, which a
+ * pack without a colour of its own takes by its glyph, as before colours could be picked. Stored by
+ * index, so only ever append to this list.
+ */
+val PackColors: List<TileColor> = buildList {
+    val glacier = YumiLightColors
+    add(TileColor(glacier.primaryContainer, glacier.onPrimaryContainer))
+    add(TileColor(glacier.tertiaryContainer, glacier.onTertiaryContainer))
+    add(TileColor(glacier.secondaryContainer, glacier.onSecondaryContainer))
+    // Pastels round the colour wheel, at one lightness so no tile shouts over the others.
+    for (hue in listOf(200f, 150f, 115f, 75f, 45f, 20f, 355f, 320f, 285f)) add(TileColor(oklch(0.90f, 0.065f, hue), oklch(0.32f, 0.085f, hue)))
+    add(TileColor(oklch(0.90f, 0.008f, 255f), oklch(0.32f, 0.012f, 255f)))
+    // And deep ones, light glyph on a dark container, for the pack that has to stand out.
+    add(TileColor(Color(0xFF2B5CAB), Color.White))
+    for (hue in listOf(155f, 70f, 10f, 305f)) add(TileColor(oklch(0.78f, 0.13f, hue), oklch(0.28f, 0.07f, hue)))
+    add(TileColor(oklch(0.30f, 0.012f, 255f), oklch(0.92f, 0.01f, 255f)))
 }
 
-/** A pack's tile: the picture its catalogue gave it, once loaded, and its glyph until then or without one. */
+/**
+ * The shapes a pack's tile can take, from Material 3 Expressive. The cookie comes first: every
+ * pack had it before shapes could be picked. Stored by index, so only ever append to this list.
+ */
+val PackShapes: List<RoundedPolygon> = listOf(
+    MaterialShapes.Cookie4Sided,
+    MaterialShapes.Circle,
+    MaterialShapes.Square,
+    MaterialShapes.Clover4Leaf,
+    MaterialShapes.Cookie7Sided,
+    MaterialShapes.Arch,
+    MaterialShapes.Cookie9Sided,
+    MaterialShapes.Sunny,
+    MaterialShapes.Flower,
+    MaterialShapes.Gem,
+    MaterialShapes.Pentagon,
+    MaterialShapes.Heart,
+    MaterialShapes.Ghostish,
+    MaterialShapes.Clover8Leaf,
+    MaterialShapes.SoftBurst,
+    MaterialShapes.PixelCircle,
+)
+
+/** The colour a tile shows: the one picked, or — without one — the one its glyph has always had. */
+fun tileColor(icon: Int, color: Int?): TileColor = PackColors[color?.coerceIn(0, PackColors.lastIndex) ?: (Math.floorMod(icon, 3))]
+
+/**
+ * A pack's tile: its glyph on its colour, cut to its shape. [color] and [shape] null are the look
+ * packs had before they could be picked: the glyph's own Glacier colour, and the cookie.
+ */
+@Composable
+fun PackTile(icon: Int, size: Dp, modifier: Modifier = Modifier, color: Int? = null, shape: Int? = null) {
+    val tint = tileColor(icon, color)
+    val polygon = PackShapes[shape?.coerceIn(0, PackShapes.lastIndex) ?: 0]
+    Box(
+        modifier.size(size).clip(polygon.toShape()).background(tint.container),
+        contentAlignment = Alignment.Center,
+    ) { Icon(PackIcons[icon.coerceIn(0, PackIcons.lastIndex)], null, Modifier.size(size * 0.5f), tint = tint.content) }
+}
+
+/**
+ * A pack's tile: the picture its catalogue gave it, once loaded, and its glyph until then or
+ * without one. A picture is cut to the pack's shape too once one is picked; until then it keeps
+ * its rounded square.
+ */
 @Composable
 fun PackTile(instance: Instance, size: Dp, modifier: Modifier = Modifier) {
-    val url = instance.iconUrl
-    val image by produceState(url?.let(ImageCache::memory), url) {
-        if (url != null && value == null) value = ImageCache.load(url)
+    val bitmap = rememberRemoteImage(instance.iconUrl)
+    val shape = instance.iconShape?.let { PackShapes[it.coerceIn(0, PackShapes.lastIndex)] }
+    when {
+        bitmap == null -> PackTile(instance.icon, size, modifier, instance.iconColor, instance.iconShape)
+        shape == null -> Image(bitmap, null, modifier.size(size).clip(RoundedCornerShape(size * 0.3f)), contentScale = ContentScale.Crop)
+        else -> Image(bitmap, null, modifier.size(size).clip(shape.toShape()), contentScale = ContentScale.Crop)
     }
-    val bitmap = image
-    if (bitmap == null) PackTile(instance.icon, size, modifier)
-    else Image(bitmap, null, modifier.size(size).clip(RoundedCornerShape(size * 0.3f)), contentScale = ContentScale.Crop)
 }
 
 /** "259,5 млн", "12 тыс.", "640" — download counts at a glance. */

@@ -24,6 +24,7 @@ data class ModHit(
     val iconUrl: String?,
     val downloads: Long,
     val pageUrl: String,
+    val type: ContentType = ContentType.Mod,
 )
 
 /**
@@ -38,6 +39,8 @@ data class ModFile(
     val version: String,
     /** Required dependencies, as ids in the same catalogue. */
     val requires: List<String>,
+    /** False when no file is marked for the pack's version and the newest one is offered instead. */
+    val exact: Boolean = true,
 )
 
 /** What a mod's own page says beyond the search result: the long description, pictures, tags. */
@@ -53,13 +56,17 @@ data class ModDetails(
 )
 
 internal interface ModCatalog {
-    suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int): List<ModHit>
+    suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int, type: ContentType = ContentType.Mod, filter: SearchFilter = SearchFilter()): List<ModHit>
 
-    /** The newest file of [projectId] for this game version and loader, or null if there is none. */
-    suspend fun file(projectId: String, minecraft: String, loader: Loader): ModFile?
+    /**
+     * The newest file of [projectId] for this game version and loader, or null if there is none. A
+     * shader or resource pack without a file marked for the version gets its newest file, marked
+     * not [ModFile.exact]: they mostly outlive the versions their authors listed.
+     */
+    suspend fun file(projectId: String, minecraft: String, loader: Loader, type: ContentType = ContentType.Mod): ModFile?
 
     /** Title and icon of a project, for dependencies pulled in by id. */
-    suspend fun describe(projectId: String): ModHit
+    suspend fun describe(projectId: String, type: ContentType = ContentType.Mod): ModHit
 
     /** The project's page: description, gallery, categories. */
     suspend fun details(projectId: String): ModDetails
@@ -75,18 +82,37 @@ internal object Modrinth : ModCatalog {
         else -> listOf(loader.name.lowercase())
     }
 
-    override suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int): List<ModHit> {
-        val facets = "[[\"project_type:mod\"],[\"versions:$minecraft\"],[${loaders(loader).joinToString(",") { "\"categories:$it\"" }}]]"
-        val url = "$API/search?query=${encode(query)}&facets=${encode(facets)}&limit=20&offset=$offset" +
-            (if (query.isBlank()) "&index=downloads" else "")
+    override suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int, type: ContentType, filter: SearchFilter): List<ModHit> {
+        val facets = buildList {
+            add("[\"project_type:${type.modrinth}\"]")
+            if (!filter.anyVersion) add("[\"versions:$minecraft\"]")
+            when (type) {
+                ContentType.Mod -> add(loaders(loader).joinToString(",", "[", "]") { "\"categories:$it\"" })
+                // What Iris and Oculus load; "vanilla" shaders are core-shader resource packs and do not go in shaderpacks.
+                ContentType.Shader -> add("[\"categories:iris\",\"categories:optifine\"]")
+                else -> Unit
+            }
+            filter.categories.values.forEach { add("[\"categories:$it\"]") }
+        }.joinToString(",", "[", "]")
+        val index = if (filter.sort == SortOrder.Relevance && query.isBlank()) "downloads" else filter.sort.modrinth
+        val url = "$API/search?query=${encode(query)}&facets=${encode(facets)}&limit=20&offset=$offset&index=$index"
         val hits = LauncherJson.parseToJsonElement(Http.text(url)).jsonObject["hits"]!!.jsonArray
-        return hits.map { hit(it.jsonObject, idKey = "project_id") }
+        return hits.map { hit(it.jsonObject, idKey = "project_id", type) }
     }
 
-    override suspend fun file(projectId: String, minecraft: String, loader: Loader): ModFile? {
-        val url = "$API/project/${encode(projectId)}/version?loaders=${encode(loaders(loader).joinToString(",", "[", "]") { "\"$it\"" })}" +
-            "&game_versions=${encode("[\"$minecraft\"]")}"
-        val versions = LauncherJson.parseToJsonElement(Http.text(url)).jsonArray.map { it.jsonObject }
+    override suspend fun file(projectId: String, minecraft: String, loader: Loader, type: ContentType): ModFile? {
+        val kinds = when (type) {
+            ContentType.Mod -> loaders(loader)
+            ContentType.Shader -> listOf("iris", "optifine")
+            else -> listOf("minecraft")
+        }
+        val base = "$API/project/${encode(projectId)}/version?loaders=${encode(kinds.joinToString(",", "[", "]") { "\"$it\"" })}"
+        var exact = true
+        var versions = LauncherJson.parseToJsonElement(Http.text(base + "&game_versions=${encode("[\"$minecraft\"]")}")).jsonArray.map { it.jsonObject }
+        if (versions.isEmpty() && type != ContentType.Mod) {
+            versions = LauncherJson.parseToJsonElement(Http.text(base)).jsonArray.map { it.jsonObject }
+            exact = false
+        }
         // Newest first; a release beats a newer beta.
         val version = versions.firstOrNull { it.str("version_type") == "release" } ?: versions.firstOrNull() ?: return null
         val files = version["files"]!!.jsonArray.map { it.jsonObject }
@@ -100,11 +126,12 @@ internal object Modrinth : ModCatalog {
             requires = version["dependencies"]?.jsonArray.orEmpty().map { it.jsonObject }
                 .filter { it.str("dependency_type") == "required" }
                 .mapNotNull { it.str("project_id") },
+            exact = exact,
         )
     }
 
-    override suspend fun describe(projectId: String): ModHit =
-        hit(LauncherJson.parseToJsonElement(Http.text("$API/project/${encode(projectId)}")).jsonObject, idKey = "id")
+    override suspend fun describe(projectId: String, type: ContentType): ModHit =
+        hit(LauncherJson.parseToJsonElement(Http.text("$API/project/${encode(projectId)}")).jsonObject, idKey = "id", type)
 
     override suspend fun details(projectId: String): ModDetails {
         val o = LauncherJson.parseToJsonElement(Http.text("$API/project/${encode(projectId)}")).jsonObject
@@ -198,7 +225,7 @@ internal object Modrinth : ModCatalog {
         return LauncherJson.parseToJsonElement(Http.text(url)).jsonObject["hits"]!!.objects()
     }
 
-    private fun hit(o: JsonObject, idKey: String) = ModHit(
+    private fun hit(o: JsonObject, idKey: String, type: ContentType) = ModHit(
         source = ModSource.Modrinth,
         id = o.str(idKey)!!,
         title = o.str("title") ?: "",
@@ -206,7 +233,8 @@ internal object Modrinth : ModCatalog {
         description = o.str("description") ?: "",
         iconUrl = o.str("icon_url"),
         downloads = o.long("downloads") ?: 0,
-        pageUrl = "https://modrinth.com/mod/${o.str("slug") ?: o.str(idKey)}",
+        pageUrl = "https://modrinth.com/${type.modrinth}/${o.str("slug") ?: o.str(idKey)}",
+        type = type,
     )
 }
 
@@ -225,15 +253,23 @@ internal class CurseForge(private val key: String) : ModCatalog {
         Loader.Vanilla -> 0
     }
 
-    override suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int): List<ModHit> {
-        val url = "$API/mods/search?gameId=$MINECRAFT&classId=$MODS&searchFilter=${encode(query)}" +
-            "&gameVersion=${encode(minecraft)}&modLoaderType=${loaderType(loader)}&sortField=2&sortOrder=desc&pageSize=20&index=$offset"
-        return data(url).jsonArray.map { hit(it.jsonObject) }
+    override suspend fun search(query: String, minecraft: String, loader: Loader, offset: Int, type: ContentType, filter: SearchFilter): List<ModHit> {
+        val category = filter.categories["categories"]?.let { "&categoryId=$it" }.orEmpty()
+        val version = if (filter.anyVersion) "" else "&gameVersion=${encode(minecraft)}"
+        val loaderType = if (type == ContentType.Mod) "&modLoaderType=${loaderType(loader)}" else ""
+        val url = "$API/mods/search?gameId=$MINECRAFT&classId=${type.curseClass}&searchFilter=${encode(query)}" +
+            "$version$loaderType$category&sortField=${filter.sort.curse}&sortOrder=desc&pageSize=20&index=$offset"
+        return data(url).jsonArray.map { hit(it.jsonObject, type) }
     }
 
-    override suspend fun file(projectId: String, minecraft: String, loader: Loader): ModFile? {
-        val url = "$API/mods/$projectId/files?gameVersion=${encode(minecraft)}&modLoaderType=${loaderType(loader)}&pageSize=20"
-        val files = data(url).jsonArray.map { it.jsonObject }
+    override suspend fun file(projectId: String, minecraft: String, loader: Loader, type: ContentType): ModFile? {
+        val loaderType = if (type == ContentType.Mod) "&modLoaderType=${loaderType(loader)}" else ""
+        var exact = true
+        var files = data("$API/mods/$projectId/files?gameVersion=${encode(minecraft)}$loaderType&pageSize=20").jsonArray.map { it.jsonObject }
+        if (files.isEmpty() && type != ContentType.Mod) {
+            files = data("$API/mods/$projectId/files?pageSize=20").jsonArray.map { it.jsonObject }
+            exact = false
+        }
         // releaseType 1 is a release; newest first either way.
         val file = files.firstOrNull { it.long("releaseType") == 1L } ?: files.firstOrNull() ?: return null
         return ModFile(
@@ -245,10 +281,11 @@ internal class CurseForge(private val key: String) : ModCatalog {
             requires = file["dependencies"]?.jsonArray.orEmpty().map { it.jsonObject }
                 .filter { it.long("relationType") == 3L }
                 .mapNotNull { it.long("modId")?.toString() },
+            exact = exact,
         )
     }
 
-    override suspend fun describe(projectId: String): ModHit = hit(data("$API/mods/$projectId").jsonObject)
+    override suspend fun describe(projectId: String, type: ContentType): ModHit = hit(data("$API/mods/$projectId").jsonObject, type)
 
     override suspend fun details(projectId: String): ModDetails {
         val o = data("$API/mods/$projectId").jsonObject
@@ -303,7 +340,7 @@ internal class CurseForge(private val key: String) : ModCatalog {
         return data("$API/mods/$modId/files?gameVersion=${encode(minecraft)}$filter&pageSize=50").objects()
     }
 
-    private fun hit(o: JsonObject) = ModHit(
+    private fun hit(o: JsonObject, type: ContentType = ContentType.Mod) = ModHit(
         source = ModSource.CurseForge,
         id = o.long("id").toString(),
         title = o.str("name") ?: "",
@@ -311,13 +348,22 @@ internal class CurseForge(private val key: String) : ModCatalog {
         description = o.str("summary") ?: "",
         iconUrl = o.obj("logo")?.str("thumbnailUrl"),
         downloads = o["downloadCount"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: 0,
-        pageUrl = o.obj("links")?.str("websiteUrl") ?: "https://www.curseforge.com/minecraft/mc-mods/${o.str("slug")}",
+        pageUrl = o.obj("links")?.str("websiteUrl") ?: "https://www.curseforge.com/minecraft/${CURSE_PATHS[type]}/${o.str("slug")}",
+        type = type,
     )
 
     companion object {
         private const val API = "https://api.curseforge.com/v1"
         private const val MINECRAFT = 432
         private const val MODS = 6
+
+        /** Where each kind lives on curseforge.com. */
+        private val CURSE_PATHS = mapOf(
+            ContentType.Mod to "mc-mods",
+            ContentType.Shader to "shaders",
+            ContentType.ResourcePack to "texture-packs",
+            ContentType.Modpack to "modpacks",
+        )
 
         /** Upload tokens and project ids look like this; people paste them where the API key goes. */
         private val GUID = Regex("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")

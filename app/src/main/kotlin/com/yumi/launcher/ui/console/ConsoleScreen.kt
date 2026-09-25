@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.IconButton
@@ -20,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -53,6 +58,11 @@ fun ConsoleScreen(model: LauncherModel) {
                     color = if (model.status is PlayStatus.Failed) scheme.error else scheme.onSurfaceVariant,
                     maxLines = 2,
                 )
+            }
+            TextButton(onClick = { model.feedback.open = true; model.feedback.sendLog() }) {
+                Icon(Icons.Outlined.BugReport, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Отправить лог")
             }
             IconButton(onClick = { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(model.log.joinToString("\n")), null) }) {
                 Icon(Icons.Rounded.ContentCopy, "Скопировать лог")

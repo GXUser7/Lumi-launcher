@@ -14,7 +14,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -88,7 +87,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -96,6 +94,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.SkippedFile
+import com.yumi.launcher.core.Support
 import com.yumi.launcher.core.LoaderVersion
 import com.yumi.launcher.core.Loaders
 import com.yumi.launcher.core.VersionEntry
@@ -121,6 +121,7 @@ import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.components.Tip
 import com.yumi.launcher.ui.components.ToggleRow
 import com.yumi.launcher.ui.components.gigabytes
+import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.home.PackRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -146,9 +147,8 @@ private class Draft(
     version: String,
     loader: Loader,
     loaderVersion: String?,
-    icon: Int,
-    /** The picture a catalogue pack came with, kept so it can be picked again after trying a glyph. */
-    val picture: String?,
+    /** The tile; its catalogue picture is kept so it can be picked again after trying a glyph. */
+    val tile: TileDraft,
     memoryMb: Int?,
     jvmArgs: String,
     width: Int?,
@@ -163,8 +163,6 @@ private class Draft(
 
     /** Null: the newest stable release, picked and pinned on first launch. */
     var loaderVersion by mutableStateOf(loaderVersion)
-    var icon by mutableIntStateOf(icon)
-    var usePicture by mutableStateOf(picture != null)
     var customMemory by mutableStateOf(memoryMb != null)
     var memoryMb by mutableIntStateOf(memoryMb ?: 4096)
     var jvmArgs by mutableStateOf(jvmArgs)
@@ -180,16 +178,18 @@ private class Draft(
 
     companion object {
         fun of(instance: Instance) = Draft(
-            instance.id, instance.name, instance.version, instance.loader, instance.loaderVersion, instance.icon, instance.iconUrl,
+            instance.id, instance.name, instance.version, instance.loader, instance.loaderVersion,
+            TileDraft(instance.icon, instance.iconColor, instance.iconShape, instance.iconUrl),
             instance.memoryMb, instance.jvmArgs, instance.width, instance.height, instance.fullscreen, instance.menuStyle,
             instance.syncOptions,
         )
-        fun new(latest: String?, icon: Int) = Draft(null, "", latest ?: "", Loader.Vanilla, null, icon, null, null, "", null, null, false, null, true)
+        fun new(latest: String?, icon: Int) =
+            Draft(null, "", latest ?: "", Loader.Vanilla, null, TileDraft(icon, null, null, null), null, "", null, null, false, null, true)
     }
 }
 
 @Composable
-fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: () -> Unit, onPlay: (Instance) -> Unit) {
+fun PacksScreen(model: LauncherModel, state: LauncherState, request: PackRequest?, onRequestHandled: () -> Unit, onPlay: (Instance) -> Unit) {
     var mode by remember { mutableStateOf<Mode>(Mode.List) }
     val nextIcon = { model.instances.all.size % PackIcons.size }
     LaunchedEffect(request) {
@@ -217,7 +217,7 @@ fun PacksScreen(model: LauncherModel, request: PackRequest?, onRequestHandled: (
                 onEdit = { mode = Mode.Edit(Draft.of(it)) },
                 onPlay = onPlay,
             )
-            Mode.Catalog -> PackCatalogScreen(model, onBack = { mode = Mode.List })
+            Mode.Catalog -> PackCatalogScreen(model, state, onBack = { mode = Mode.List })
             is Mode.Edit -> PackEditor(
                 model,
                 current.draft,
@@ -324,16 +324,49 @@ private fun ImportStatus(model: LauncherModel, onPlay: (Instance) -> Unit, onEdi
                 }
             }
             finished != null -> Surface(shape = RoundedCornerShape(22.dp), color = scheme.primaryContainer, contentColor = scheme.onPrimaryContainer, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.CheckCircle, null, Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("«${finished.name}» установлена", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${finished.loader.label} ${finished.version} · уже выбрана на главной", style = MaterialTheme.typography.bodySmall)
+                Column {
+                    Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.CheckCircle, null, Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("«${finished.name}» установлена", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${finished.loader.label} ${finished.version} · уже выбрана на главной", style = MaterialTheme.typography.bodySmall)
+                        }
+                        TextButton(onClick = { imports.finished = null; onEdit(finished) }) { Text("Настроить") }
+                        Button(onClick = { imports.finished = null; onPlay(finished) }, shapes = ButtonDefaults.shapes(), enabled = !model.busy) { Text("Играть") }
+                        IconButton(onClick = { imports.finished = null }) { Icon(Icons.Rounded.Close, "Скрыть") }
                     }
-                    TextButton(onClick = { imports.finished = null; onEdit(finished) }) { Text("Настроить") }
-                    Button(onClick = { imports.finished = null; onPlay(finished) }, shapes = ButtonDefaults.shapes(), enabled = !model.busy) { Text("Играть") }
-                    IconButton(onClick = { imports.finished = null }) { Icon(Icons.Rounded.Close, "Скрыть") }
+                    if (imports.skipped.isNotEmpty()) SkippedFiles(model, finished, imports.skipped)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The resource and shader packs an import left out: their authors let CurseForge's own site have
+ * them and no launcher. The pack works without them; each has its page, and the folder it goes in
+ * is a click away — dropped there, it shows up in the game's list.
+ */
+@Composable
+private fun SkippedFiles(model: LauncherModel, pack: Instance, skipped: List<SkippedFile>) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(18.dp), color = scheme.surfaceContainerLowest.copy(alpha = 0.55f), modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "Без ${countOf(skipped.size, "файла", "файлов", "файлов")} оформления — сборка работает и без них",
+                style = MaterialTheme.typography.titleSmall,
+                color = scheme.onSurface,
+            )
+            Hint("Их авторы разрешили скачивание только на сайте CurseForge. Скачайте с его страницы и положите в папку, не распаковывая, — игра подхватит сама.")
+            skipped.forEach { file ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(file.name, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Hint("${file.kind} · папка ${file.folder}")
+                    }
+                    if (file.page.isNotBlank()) TextButton(onClick = { Support.open(file.page) }) { Text("Страница") }
+                    TextButton(onClick = { model.openFolder(model.instances.gameDir(pack).resolve(file.folder)) }) { Text("Папка") }
                 }
             }
         }
@@ -454,7 +487,7 @@ private fun PackEditor(model: LauncherModel, draft: Draft, onPickVersion: () -> 
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Label("Значок")
-                IconPicker(draft)
+                TilePicker(draft.tile)
             }
             FormSection("Игра", Icons.Rounded.ViewInAr, subtitle = "Версия Minecraft и загрузчик модов") {
                 VersionRow(model, draft.version, onPickVersion)
@@ -590,32 +623,6 @@ private fun loaderHint(loader: Loader) = when (loader) {
     Loader.NeoForge -> "Преемник Forge: крупные моды на 1.20.2 и новее."
 }
 
-/** The glyphs, and the pack's own picture first when it has one. The picked one wears a ring. */
-@Composable
-private fun IconPicker(draft: Draft) {
-    val scheme = MaterialTheme.colorScheme
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        @Composable
-        fun Choice(picked: Boolean, onPick: () -> Unit, tile: @Composable () -> Unit) {
-            Box(
-                Modifier.size(48.dp).clip(CircleShape)
-                    .then(if (picked) Modifier.border(2.dp, scheme.primary, CircleShape) else Modifier)
-                    .clickable(onClick = onPick),
-                contentAlignment = Alignment.Center,
-            ) { tile() }
-        }
-        draft.picture?.let { url ->
-            Choice(draft.usePicture, { draft.usePicture = true }) {
-                PackTile(Instance(id = "", name = "", version = "", icon = draft.icon, iconUrl = url), if (draft.usePicture) 38.dp else 32.dp)
-            }
-        }
-        PackIcons.indices.forEach { i ->
-            val picked = !draft.usePicture && draft.icon == i
-            Choice(picked, { draft.icon = i; draft.usePicture = false }) { PackTile(i, if (picked) 38.dp else 32.dp) }
-        }
-    }
-}
-
 /** The pack's version as a field: tapping it opens the full list. */
 @Composable
 private fun VersionRow(model: LauncherModel, version: String, onPick: () -> Unit) {
@@ -641,14 +648,16 @@ private fun VersionRow(model: LauncherModel, version: String, onPick: () -> Unit
 private fun save(model: LauncherModel, draft: Draft, existing: Instance?): Instance {
     val width = draft.width.toIntOrNull()?.takeIf { it > 0 }
     val height = draft.height.toIntOrNull()?.takeIf { it > 0 }
-    val base = existing ?: model.instances.create(draft.name, draft.version, draft.icon)
+    val base = existing ?: model.instances.create(draft.name, draft.version, draft.tile.icon)
     val updated = base.copy(
         name = draft.name.trim(),
         version = draft.version,
         loader = draft.loader,
         loaderVersion = if (draft.loader == Loader.Vanilla) null else draft.loaderVersion,
-        icon = draft.icon,
-        iconUrl = if (draft.usePicture) draft.picture else null,
+        icon = draft.tile.icon,
+        iconColor = draft.tile.color,
+        iconShape = draft.tile.shape,
+        iconUrl = if (draft.tile.usePicture) draft.tile.picture else null,
         memoryMb = if (draft.customMemory) draft.memoryMb else null,
         jvmArgs = draft.jvmArgs.trim(),
         width = if (width != null && height != null) width else null,

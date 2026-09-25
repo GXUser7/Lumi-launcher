@@ -62,6 +62,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,7 +73,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.core.Categories
+import com.yumi.launcher.core.Category
+import com.yumi.launcher.core.ContentType
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.SearchFilter
 import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.core.PackCatalog
 import com.yumi.launcher.core.PackHit
@@ -80,6 +85,8 @@ import com.yumi.launcher.core.PackRelease
 import com.yumi.launcher.core.ReleaseType
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.ui.components.CurseForgeKeyPrompt
+import com.yumi.launcher.ui.home.FilterPanel
+import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.Label
@@ -100,12 +107,23 @@ import java.net.URI
  * pack, pick the game version and the release, install. The install itself is the model's
  * [com.yumi.launcher.data.PackImporter], so it carries on when this screen is left.
  */
+/** The modpack catalogue's search: what is typed, where, and its filters — which the panel beside the card sets. */
+class PackSearch {
+    var source by mutableStateOf(ModSource.Modrinth)
+    var query by mutableStateOf("")
+    var version by mutableStateOf<String?>(null)
+    var loader by mutableStateOf<Loader?>(null)
+    var filter by mutableStateOf(SearchFilter())
+}
+
 @Composable
-internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
-    var source by remember { mutableStateOf(ModSource.Modrinth) }
-    var query by remember { mutableStateOf("") }
-    var version by remember { mutableStateOf<String?>(null) }
-    var loader by remember { mutableStateOf<Loader?>(null) }
+internal fun PackCatalogScreen(model: LauncherModel, state: LauncherState, onBack: () -> Unit) {
+    val search = state.packSearch
+    val source = search.source
+    val query = search.query
+    val version = search.version
+    val loader = search.loader
+    val filter = search.filter
     var hits by remember { mutableStateOf<List<PackHit>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -113,7 +131,7 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
     val list = rememberLazyListState()
     val key = model.settings.curseForgeKey.trim()
 
-    LaunchedEffect(source, query, version, loader, key) {
+    LaunchedEffect(source, query, version, loader, key, filter) {
         error = null
         if (source == ModSource.CurseForge && key.isBlank()) {
             hits = emptyList()
@@ -122,7 +140,7 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
         delay(350)
         searching = true
         try {
-            hits = PackCatalog.search(source, query.trim(), version.orEmpty(), loader, key)
+            hits = PackCatalog.search(source, query.trim(), version.orEmpty(), loader, key, filter)
             list.scrollToItem(0)
         } catch (e: CancellationException) {
             throw e
@@ -142,8 +160,15 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
             PackDetail(model, source, hit, preferred = version, onBack = { chosen = null })
             return@AnimatedContent
         }
+        // The filters live in the panel right of the card while the list is on screen.
+        val panel = remember { FilterPanel(modpacks = true) }
+        DisposableEffect(panel) {
+            state.filters = panel
+            onDispose { if (state.filters === panel) state.filters = null }
+        }
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Header("Каталог сборок", onBack) {
+                if (searching) LoadingIndicator(Modifier.size(32.dp))
                 TextButton(onClick = { pickArchive()?.let { model.packImports.installFile(it, model.instances.all.size % PackIcons.size) } }, enabled = !model.packImports.busy) {
                     Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
@@ -151,12 +176,12 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SearchField(query, { query = it }, "Поиск: create, cobblemon, optimized…", Modifier.weight(1f))
+                SearchField(query, { search.query = it }, "Поиск: create, cobblemon, optimized…", Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                     ModSource.entries.forEachIndexed { i, item ->
                         ToggleButton(
                             checked = source == item,
-                            onCheckedChange = { source = item },
+                            onCheckedChange = { search.source = item; search.filter = SearchFilter() },
                             shapes = connectedShapes(i, ModSource.entries.size),
                             colors = choiceColors(),
                             contentPadding = PaddingValues(horizontal = 12.dp),
@@ -165,19 +190,13 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GameVersionFilter(model, version) { version = it }
-                LoaderFilter(loader) { loader = it }
-                Spacer(Modifier.weight(1f))
-                if (searching) LoadingIndicator(Modifier.size(32.dp))
-            }
             AnimatedVisibility(model.packImports.busy, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 ImportProgress(model, Modifier.fillMaxWidth())
             }
-            error?.let { ErrorLine(it) { query = query.trim() + " " } }
+            error?.let { ErrorLine(it) { search.query = query.trim() + " " } }
             when {
                 source == ModSource.CurseForge && key.isBlank() -> CurseForgeKeyPrompt { model.settings.curseForgeKey = it }
-                hits.isEmpty() && !searching && error == null -> NothingFound(version, loader)
+                hits.isEmpty() && !searching && error == null -> NothingFound(version, loader, filter.categories.isNotEmpty())
                 else -> LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(hits, key = { it.id }) { hit -> HitCard(hit) { chosen = hit } }
                 }
@@ -191,7 +210,7 @@ internal fun PackCatalogScreen(model: LauncherModel, onBack: () -> Unit) {
  * for most at the top, then every release in Mojang's list.
  */
 @Composable
-private fun GameVersionFilter(model: LauncherModel, version: String?, onPick: (String?) -> Unit) {
+internal fun GameVersionFilter(model: LauncherModel, version: String?, anyLabel: String = "Любая версия", onPick: (String?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
     val releases = remember(model.manifest) { model.manifest?.versions.orEmpty().filter { it.type == "release" }.map { it.id } }
@@ -199,7 +218,7 @@ private fun GameVersionFilter(model: LauncherModel, version: String?, onPick: (S
         FilterChip(
             selected = version != null,
             onClick = { open = true },
-            label = { Text(version?.let { "Minecraft $it" } ?: "Любая версия") },
+            label = { Text(version?.let { "Minecraft $it" } ?: anyLabel) },
             leadingIcon = { Icon(if (version != null) Icons.Rounded.Check else Icons.Rounded.ViewInAr, null, Modifier.size(FilterChipDefaults.IconSize)) },
             trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(FilterChipDefaults.IconSize)) },
             shape = CircleShape,
@@ -227,31 +246,6 @@ private fun VersionItem(version: String, picked: Boolean, onClick: () -> Unit) {
         trailingIcon = { if (picked) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.primary) },
         onClick = onClick,
     )
-}
-
-@Composable
-private fun LoaderFilter(loader: Loader?, onPick: (Loader?) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val scheme = MaterialTheme.colorScheme
-    Box {
-        FilterChip(
-            selected = loader != null,
-            onClick = { open = true },
-            label = { Text(loader?.label ?: "Любой загрузчик") },
-            leadingIcon = { Icon(if (loader != null) Icons.Rounded.Check else Icons.Rounded.Widgets, null, Modifier.size(FilterChipDefaults.IconSize)) },
-            trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(FilterChipDefaults.IconSize)) },
-            shape = CircleShape,
-        )
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
-            (listOf(null) + Loader.entries.filter { it != Loader.Vanilla }).forEach { item ->
-                DropdownMenuItem(
-                    text = { Text(item?.label ?: "Любой загрузчик") },
-                    trailingIcon = { if (item == loader) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
-                    onClick = { onPick(item); open = false },
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -284,12 +278,18 @@ private fun HitCard(hit: PackHit, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun NothingFound(version: String?, loader: Loader?) {
+private fun NothingFound(version: String?, loader: Loader?, categories: Boolean) {
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ShapeTile(Icons.Rounded.SearchOff, scheme.secondaryContainer, scheme.onSecondaryContainer, 64.dp)
         Text("Ничего не нашлось", style = MaterialTheme.typography.titleMedium)
-        Hint(if (version != null || loader != null) "Попробуйте другую версию или любой загрузчик." else "Попробуйте другое название.")
+        Hint(
+            when {
+                categories -> "Попробуйте другую категорию или сбросьте фильтры."
+                version != null || loader != null -> "Попробуйте другую версию или любой загрузчик."
+                else -> "Попробуйте другое название."
+            },
+        )
     }
 }
 

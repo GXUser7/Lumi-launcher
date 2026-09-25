@@ -62,6 +62,18 @@ private fun skyHues(palette: Palette) = when (palette) {
     Palette.Pink -> SkyHues(zenith = 315f, horizon = 355f, glow = 45f, aurora = 175f)
     // Sky over lavender, a butter-yellow sun, a lavender aurora.
     Palette.Blue -> SkyHues(zenith = 245f, horizon = 285f, glow = 85f, aurora = 290f)
+    // Violet dusk over lavender, a rose glow, an aqua aurora.
+    Palette.Lavender -> SkyHues(zenith = 290f, horizon = 320f, glow = 60f, aurora = 200f)
+    // Plum over cherry blossom, a gold sun, a green aurora.
+    Palette.Cherry -> SkyHues(zenith = 320f, horizon = 10f, glow = 65f, aurora = 150f)
+    // A clear blue over a peach horizon, a sea-green aurora.
+    Palette.Peach -> SkyHues(zenith = 255f, horizon = 45f, glow = 60f, aurora = 185f)
+    // Evening blue over an amber horizon, a sage aurora.
+    Palette.Amber -> SkyHues(zenith = 245f, horizon = 65f, glow = 70f, aurora = 140f)
+    // Deep sea over sea glass, a sandy sun.
+    Palette.Teal -> SkyHues(zenith = 225f, horizon = 190f, glow = 80f, aurora = 165f)
+    // Steel over pale grey-blue: the calmest sky.
+    Palette.Graphite -> SkyHues(zenith = 250f, horizon = 235f, glow = 80f, aurora = 175f)
 }
 
 /** One layer of blocky clouds: a slab between [bottom] and [top], in square cells [cell] blocks wide. */

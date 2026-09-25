@@ -47,7 +47,7 @@ internal object MenuStyles {
         val format = resourceFormat(clientJar)
         if (style == null || format == null || format < MenuPack.MIN_FORMAT) {
             if (file.isFile && ours(file)) file.delete()
-            options(gameDir) { packs -> packs - ID }
+            editResourcePacks(gameDir) { packs -> packs - ID }
             return
         }
         val bytes = cached(style, maxOf(format, MenuPack.KNOWN_FORMAT))
@@ -56,7 +56,7 @@ internal object MenuStyles {
             file.writeBytes(bytes)
         }
         // Added once, on top; never moved back there if the player has put it somewhere else.
-        options(gameDir) { packs -> if (ID in packs) packs else packs + ID }
+        editResourcePacks(gameDir) { packs -> if (ID in packs) packs else packs + ID }
     }
 
     /** Building a pack paints six faces of sky, about a second of work: one copy per look is kept. */
@@ -90,24 +90,27 @@ internal object MenuStyles {
             }
         }
     }.getOrNull()
+}
 
-    /**
-     * Rewrites the `resourcePacks` line of the game's `options.txt` through [change], leaving every
-     * other line as it was. A game that has not run yet gets a file with just that line.
-     */
-    private fun options(gameDir: File, change: (List<String>) -> List<String>) {
-        val file = gameDir.resolve("options.txt")
-        val lines = if (file.isFile) file.readLines() else emptyList()
-        val at = lines.indexOfFirst { it.startsWith("resourcePacks:") }
-        val packs = if (at < 0) listOf("vanilla") else runCatching {
-            LauncherJson.parseToJsonElement(lines[at].removePrefix("resourcePacks:")).jsonArray.map { it.jsonPrimitive.content }
-        }.getOrElse { listOf("vanilla") }
-        val changed = change(packs)
-        if (changed == packs && at >= 0) return
-        if (at < 0 && ID !in changed) return
-        val line = "resourcePacks:" + JsonArray(changed.map(::JsonPrimitive))
-        val updated = if (at < 0) lines + line else lines.toMutableList().also { it[at] = line }
-        file.parentFile.mkdirs()
-        file.writeText(updated.joinToString("\n", postfix = "\n"))
-    }
+/** The resource packs switched on in the game at [gameDir], bottom to top, as `options.txt` lists them. */
+internal fun resourcePacks(gameDir: File): List<String> {
+    val line = gameDir.resolve("options.txt").takeIf { it.isFile }?.readLines()?.firstOrNull { it.startsWith("resourcePacks:") } ?: return listOf("vanilla")
+    return runCatching { LauncherJson.parseToJsonElement(line.removePrefix("resourcePacks:")).jsonArray.map { it.jsonPrimitive.content } }.getOrElse { listOf("vanilla") }
+}
+
+/**
+ * Rewrites the `resourcePacks` line of the game's `options.txt` through [change], leaving every
+ * other line as it was. A game that has not run yet gets a file with just that line.
+ */
+internal fun editResourcePacks(gameDir: File, change: (List<String>) -> List<String>) {
+    val file = gameDir.resolve("options.txt")
+    val lines = if (file.isFile) file.readLines() else emptyList()
+    val at = lines.indexOfFirst { it.startsWith("resourcePacks:") }
+    val packs = resourcePacks(gameDir)
+    val changed = change(packs)
+    if (changed == packs) return
+    val line = "resourcePacks:" + JsonArray(changed.map(::JsonPrimitive))
+    val updated = if (at < 0) lines + line else lines.toMutableList().also { it[at] = line }
+    file.parentFile.mkdirs()
+    file.writeText(updated.joinToString("\n", postfix = "\n"))
 }

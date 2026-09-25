@@ -19,7 +19,12 @@ import kotlinx.coroutines.launch
  * the refresh token in the settings keeps the player signed in, and each launch gets a game token
  * that is still good.
  */
-class MicrosoftAccount(private val settings: LauncherSettings, private val scope: CoroutineScope) {
+class MicrosoftAccount(
+    private val settings: LauncherSettings,
+    private val scope: CoroutineScope,
+    /** Told the new account's uuid just before it takes the Microsoft slot, so the one there can be put away. */
+    private val beforeSignIn: (String) -> Unit = {},
+) {
     /** The code to confirm on Microsoft's page, while the launcher waits for that. */
     var code by mutableStateOf<MicrosoftCode?>(null)
         private set
@@ -47,7 +52,9 @@ class MicrosoftAccount(private val settings: LauncherSettings, private val scope
             try {
                 val fresh = Microsoft.code()
                 code = fresh
-                settings.microsoftSession = Microsoft.await(fresh) { step = it }
+                val session = Microsoft.await(fresh) { step = it }
+                beforeSignIn(session.uuid)
+                settings.microsoftSession = session
                 onDone()
             } catch (e: CancellationException) {
                 throw e

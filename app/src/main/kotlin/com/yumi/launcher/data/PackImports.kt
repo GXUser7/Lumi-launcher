@@ -9,6 +9,7 @@ import com.yumi.launcher.core.Http
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.ModSource
 import com.yumi.launcher.core.PackArchives
+import com.yumi.launcher.core.SkippedFile
 import com.yumi.launcher.core.PackCatalog
 import com.yumi.launcher.core.PackHit
 import com.yumi.launcher.core.PackRelease
@@ -38,6 +39,9 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
 
     /** The pack the last import made, until the screen has shown it. */
     var finished by mutableStateOf<Instance?>(null)
+
+    /** Resource and shader packs the last import had to leave out: their authors keep them off launchers. */
+    internal var skipped by mutableStateOf<List<SkippedFile>>(emptyList())
 
     /** Where the running import came from: "Modrinth:<project id>", "server:<quick-join id>", "friend:<address>", or the file's path. */
     var origin by mutableStateOf<String?>(null)
@@ -101,13 +105,16 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
             progress = 0f
             error = null
             finished = null
+            skipped = emptyList()
             job = scope.launch {
                 try {
                     work()
+                    model.downloads.record(title ?: name, "сборка", null)
                 } catch (e: CancellationException) {
                     error = null
                 } catch (e: Exception) {
                     error = "Не удалось установить «$name»: ${e.message ?: e::class.simpleName}"
+                    model.downloads.record(title ?: name, "сборка", e.message ?: e::class.simpleName)
                 } finally {
                     title = null
                     origin = null
@@ -129,7 +136,8 @@ class PackImporter(private val model: LauncherModel, private val scope: Coroutin
         try {
             instances.save(pack.copy(loader = info.loader, loaderVersion = info.loaderVersion, iconUrl = iconUrl))
             stage = "Скачиваем моды"
-            PackArchives.install(file, instances.folder(pack), model.settings.curseForgeKey.trim()) { report(from + it * (0.95f - from)) }
+            val left = PackArchives.install(file, instances.folder(pack), model.settings.curseForgeKey.trim()) { report(from + it * (0.95f - from)) }
+            withContext(Dispatchers.Main) { skipped = left }
             if (server != null) {
                 stage = "Скачиваем серверную часть"
                 val archive = LauncherPaths.cache.resolve("modpacks/server-${server.id}.zip")

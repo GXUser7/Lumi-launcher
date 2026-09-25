@@ -8,6 +8,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.yumi.launcher.scene.SceneSpot
+import com.yumi.launcher.ui.packs.PackSearch
 
 /** A part of the launcher, and the place on the island the camera shows while it is open. */
 enum class Section(val label: String, val icon: ImageVector, val spot: SceneSpot) {
@@ -59,6 +61,7 @@ enum class ServersTab(val label: String) { Hosted("Мои серверы"), Quic
 enum class ServerTab(val label: String, val icon: ImageVector) {
     Console("Терминал", Icons.Rounded.Terminal),
     Settings("Настройки", Icons.Rounded.Tune),
+    Whitelist("Вайтлист", Icons.Rounded.VerifiedUser),
     Bans("Баны", Icons.Rounded.Block),
     Mods("Моды", Icons.Rounded.Extension),
 }
@@ -89,6 +92,15 @@ class LauncherState {
 
     /** The server whose pack is being made, over the window. */
     var serverPack by mutableStateOf<ServerPackTarget?>(null)
+
+    /** The newcomer's guide and where the things it points at are. */
+    val guide = GuideState()
+
+    /** The catalogue whose filters are in the panel right of the card; null — no panel. */
+    var filters by mutableStateOf<FilterPanel?>(null)
+
+    /** The modpack catalogue's search, kept here so the filters panel can change it and a return finds it as it was. */
+    val packSearch = PackSearch()
 
     fun openPacks(request: PackRequest? = null) {
         packRequest = request

@@ -20,6 +20,10 @@ data class Instance(
     /** Null until the first launch picks the newest stable release; pinned from then on. */
     val loaderVersion: String? = null,
     val icon: Int = 0,
+    /** Index in `PackColors`; null is the colour the glyph at [icon] has always had. */
+    val iconColor: Int? = null,
+    /** Index in `PackShapes`; null is the cookie for a glyph and a rounded square for a picture. */
+    val iconShape: Int? = null,
     /** A modpack's own picture from its catalogue; the glyph at [icon] is shown while it loads, or without it. */
     val iconUrl: String? = null,
     val memoryMb: Int? = null,

@@ -7,10 +7,12 @@ import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.yumi.launcher.core.ElySession
+import com.yumi.launcher.core.LauncherJson
 import com.yumi.launcher.core.MicrosoftSession
 import java.lang.management.ManagementFactory
 import java.util.UUID
 import java.util.prefs.Preferences
+import kotlinx.serialization.Serializable
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -20,10 +22,37 @@ enum class ThemeMode(val label: String, val icon: ImageVector) {
     Dark("Тёмная", Icons.Rounded.DarkMode),
 }
 
-/** The colours: Yumi's own Glacier, or one of the pastel palettes. Stored by name. */
-enum class Palette(val label: String) { Original("Оригинал"), Green("Зелёная"), Pink("Розовая"), Blue("Синяя") }
+/** The colours: Yumi's own Glacier, or one of the pastel palettes. Stored by name, so the order here is round the colour wheel. */
+enum class Palette(val label: String) {
+    Original("Оригинал"),
+    Blue("Синяя"),
+    Lavender("Лавандовая"),
+    Pink("Розовая"),
+    Cherry("Вишнёвая"),
+    Peach("Персиковая"),
+    Amber("Янтарная"),
+    Green("Зелёная"),
+    Teal("Бирюзовая"),
+    Graphite("Графитовая"),
+}
 
 enum class AccountKind(val label: String) { Microsoft("Microsoft"), Offline("Офлайн"), ElyBy("Ely.by") }
+
+/**
+ * An account waiting in the switcher with the tokens it was put away with — every account but the
+ * one of each kind in the settings' slots; see `Accounts`.
+ */
+@Serializable
+data class SavedAccount(
+    val kind: AccountKind,
+    val name: String,
+    val uuid: String = "",
+    val accessToken: String = "",
+    val refreshToken: String = "",
+    val expiresAt: Long = 0,
+    val xuid: String = "",
+    val skin: String? = null,
+)
 
 /**
  * How much the island draws. Low is flat colour with plain light; Medium adds the block textures,
@@ -31,7 +60,8 @@ enum class AccountKind(val label: String) { Microsoft("Microsoft"), Offline("О�
  * shadows, halos and lens stars over the lights, the sun's lens flare, a vignette, smoke, sparks
  * and fireflies, and islands far out in the haze;
  * Ultra adds light shafts, the aurora, swaying leaves and grass, glints on the water, shadows of
- * passing clouds, birds, and the rest of the particles.
+ * passing clouds, birds, and the rest of the particles — and, on a GPU, a sky drawn by shaders: soft
+ * clouds above and a sea of them below, a real night sky with the Milky Way, and fog.
  * Stored by name, so the order here is only the order of the buttons.
  */
 enum class SceneQuality(val label: String) { Low("Низкое"), Medium("Среднее"), High("Высокое"), Ultra("Ультра") }
@@ -83,6 +113,9 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
     /** The island holds still while the game runs, leaving the GPU to it; off, it keeps moving. */
     var scenePausedInGame by stored("scenePausedInGame", true, { it == "true" }, { it.toString() })
 
+    /** The newcomer's guide has been seen — finished or skipped; it starts by itself until then. */
+    var guideDone by stored("guideDone", false, { it == "true" }, { it.toString() })
+
     /** The home screen's news, folded down to their header so the island has the corner. */
     var newsHidden by stored("newsHidden", false, { it == "true" }, { it.toString() })
 
@@ -133,6 +166,28 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
             msName = value?.name.orEmpty()
             msXuid = value?.xuid.orEmpty()
             msSkin = value?.skin.orEmpty()
+        }
+
+    /**
+     * The accounts waiting in the switcher. One preferences entry each, in a node of their own: a
+     * value may hold at most 8 KB, and a few Microsoft accounts' tokens together would not fit one.
+     */
+    private val accountsNode = store.node("savedAccounts")
+    private val saved = mutableStateOf(
+        runCatching {
+            accountsNode.keys().sorted().mapNotNull { key ->
+                accountsNode.get(key, null)?.let { runCatching { LauncherJson.decodeFromString(SavedAccount.serializer(), it) }.getOrNull() }
+            }
+        }.getOrDefault(emptyList()),
+    )
+    var savedAccounts: List<SavedAccount>
+        get() = saved.value
+        set(value) {
+            saved.value = value
+            runCatching {
+                accountsNode.clear()
+                value.forEachIndexed { i, account -> accountsNode.put("a%03d".format(i), LauncherJson.encodeToString(SavedAccount.serializer(), account)) }
+            }
         }
 
     /** Minecraft's own rule for a player name. */

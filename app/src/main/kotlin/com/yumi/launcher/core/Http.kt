@@ -39,6 +39,8 @@ internal object Http {
             val response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString())
             // A refusal is an answer, not a network hiccup: retrying a 403 only delays saying so.
             if (response.statusCode() in 400..499) throw HttpRefused(response.statusCode())
+            // "No content" is an answer too — the profile APIs say "no such player" with it.
+            if (response.statusCode() == 204) return@retry ""
             if (response.statusCode() != 200) throw IOException("HTTP ${response.statusCode()}")
             response.body()
         }

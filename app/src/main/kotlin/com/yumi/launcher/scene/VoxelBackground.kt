@@ -43,10 +43,14 @@ import kotlin.math.sqrt
 import kotlin.math.tan
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 
-/** Where the pointer is over the window, -1..1 on both axes. Written by input, read per frame. */
+/**
+ * Where the pointer is over the window, -1..1 on both axes, and how far the mouse wheel has turned
+ * the island, in radians. Written by input, read per frame.
+ */
 class Parallax {
     var x = 0f
     var y = 0f
+    var spin = 0f
 }
 
 class SceneOptions(val quality: SceneQuality, val motion: SceneMotion, val fps: Int)
@@ -69,6 +73,8 @@ fun VoxelBackground(
     spot: SceneSpot,
     modifier: Modifier = Modifier,
     running: Boolean = true,
+    /** False on a software renderer: the Ultra sky's shaders would run on the CPU there, a frame a second. */
+    shaders: Boolean = true,
 ) {
     val renderer by produceState<VoxelRenderer?>(null) {
         value = withContext(Dispatchers.Default) { VoxelRenderer(islandScene()) }
@@ -89,6 +95,7 @@ fun VoxelBackground(
             r.night = if (night) 1f else 0f
             r.options = options
             r.spot = spot
+            r.shaders = shaders
             r.draw(this, millis, parallax)
         }
     }
@@ -119,6 +126,12 @@ internal class VoxelRenderer(private val scene: Scene) {
     var night = 0f
     var options = SceneOptions(SceneQuality.Ultra, SceneMotion.Both, 60)
     var spot = SceneSpot.Overview
+
+    /** Whether Ultra may draw its sky with shaders; see [UltraSky]. */
+    var shaders = true
+
+    /** Compiled the first time Ultra is drawn; null when the shaders cannot be had. */
+    private val ultra by lazy { UltraSky.create() }
 
     private val world = scene.world
     private val faces = scene.faces
@@ -152,6 +165,7 @@ internal class VoxelRenderer(private val scene: Scene) {
     private var last = 0L
     private var px = 0f
     private var py = 0f
+    private var spin = 0f
     private var blend = -1f
     private var now = 0f
 
@@ -188,6 +202,10 @@ internal class VoxelRenderer(private val scene: Scene) {
         last = millis
         px += (parallax.x - px) * 0.06f
         py += (parallax.y - py) * 0.06f
+        // Only the whole island turns all the way round; a place inside a building is kept to a
+        // glance either side, and leaving for one forgets the turn.
+        if (heading != spot && !scene.spots.getValue(spot).orbit) parallax.spin = 0f
+        spin += (parallax.spin - spin) * (1 - exp(-dt * 6f))
         // The first frame takes the theme as it is; after that a change eases in over ~a second.
         blend = if (blend < 0f) night else blend + (night - blend) * (1 - exp(-dt * 3.2f))
         if (abs(night - blend) < 0.002f) blend = night
@@ -201,15 +219,34 @@ internal class VoxelRenderer(private val scene: Scene) {
         }
 
         val quality = options.quality
-        drawSky(h)
-        drawStars(t, h, quality)
-        if (quality == SceneQuality.Ultra) drawAurora(t)
-        drawLights(t, h, quality)
-        if (quality >= SceneQuality.High) drawFar(t)
-        // Behind the island, over the sky and the far clouds: haze in front of the island reads as a stripe across it.
-        if (quality == SceneQuality.Ultra) drawHaze(h)
-        drawClouds(t, w, h, quality)
-        drawIsland(t, w, h, quality)
+        val sky = if (quality == SceneQuality.Ultra && shaders) ultra else null
+        if (sky != null) {
+            // Ultra: the sky, its stars and its clouds from the shaders; the discs, the aurora and
+            // shooting stars as on the other levels, in between.
+            val canvas = drawContext.canvas.skiaCanvas
+            ultraFrame(sky.frame, t)
+            sky.drawSky(canvas, w, h)
+            drawShootingStar(t, h)
+            drawAurora(t)
+            drawLights(t, h, quality)
+            sky.drawClouds(canvas, w, h)
+            drawFar(t)
+            drawHaze(h)
+            drawIsland(t, w, h, quality)
+            // Fog in front of the island, seen from outside it only: the island reaches about 24 blocks from its middle.
+            sky.drawMist(canvas, w, h, sqrt(cam[0] * cam[0] + cam[2] * cam[2]) - 24f)
+            sky.endFrame()
+        } else {
+            drawSky(h)
+            drawStars(t, h, quality)
+            if (quality == SceneQuality.Ultra) drawAurora(t)
+            drawLights(t, h, quality)
+            if (quality >= SceneQuality.High) drawFar(t)
+            // Behind the island, over the sky and the far clouds: haze in front of the island reads as a stripe across it.
+            if (quality == SceneQuality.Ultra) drawHaze(h)
+            drawClouds(t, w, h, quality)
+            drawIsland(t, w, h, quality)
+        }
         if (quality == SceneQuality.Ultra) drawGlints(t)
         if (quality >= SceneQuality.High) drawGlows(t, quality)
         if (quality >= SceneQuality.Medium) drawParticles(t, dt, quality)
@@ -289,7 +326,10 @@ internal class VoxelRenderer(private val scene: Scene) {
         }
         when (motion) {
             SceneMotion.Rotate -> Unit
-            SceneMotion.Mouse -> { yaw += px * (if (config.orbit) 0.8f else 0.25f); pitch += py * (if (config.orbit) 0.16f else 0.06f) }
+            SceneMotion.Mouse -> {
+                yaw += px * (if (config.orbit) 0.8f else 0.25f) + if (config.orbit) spin else spin.coerceIn(-0.35f, 0.35f)
+                pitch += py * (if (config.orbit) 0.16f else 0.06f)
+            }
             SceneMotion.Both -> { yaw += px * parallaxAmount; pitch += py * parallaxAmount * 0.4f }
         }
         val tgt = pose.target
@@ -388,8 +428,13 @@ internal class VoxelRenderer(private val scene: Scene) {
             val twinkle = if (quality >= SceneQuality.High) 0.55f + 0.45f * sin(t * 1.3f + s.phase) else 0.8f
             drawRect(Color.White, Offset(at.x, at.y), Size(size * s.scale, size * s.scale), alpha = blend * twinkle * (0.3f + 0.6f * s.y))
         }
-        // Now and then a shooting star, on Ultra.
-        if (quality == SceneQuality.Ultra) {
+        if (quality == SceneQuality.Ultra) drawShootingStar(t, h)
+    }
+
+    /** Ultra, at night: now and then a shooting star. */
+    private fun DrawScope.drawShootingStar(t: Float, h: Float) {
+        if (blend <= 0.01f) return
+        run {
             val period = 7f
             val k = floor(t / period).toInt()
             val phase = (t - k * period) / 1.1f
@@ -479,6 +524,28 @@ internal class VoxelRenderer(private val scene: Scene) {
         auroraPos[n * 2 + 1] = column.y[row]
         auroraCol[n] = column.c[row]
         return n + 1
+    }
+
+    /** Hands the Ultra sky this frame's camera, colours and light. */
+    private fun ultraFrame(f: UltraSky.Frame, t: Float) {
+        cam.copyInto(f.eye)
+        fwd.copyInto(f.fwd)
+        right.copyInto(f.right)
+        up.copyInto(f.up)
+        f.focal = focal
+        f.cx = ox
+        f.cy = oy
+        f.time = t
+        f.night = blend
+        val day = scene.day.sky
+        val night = scene.night.sky
+        for ((i, out) in listOf(f.zenith, f.mid, f.horizon).withIndex()) {
+            val c = lerp(day[i], night[i], blend)
+            out[0] = c.red; out[1] = c.green; out[2] = c.blue
+        }
+        for (ch in 0 until 3) f.fog[ch] = fogColor(ch) / 255f
+        UltraSky.normalized(scene.sun[0], scene.sun[1], scene.sun[2], f.sun)
+        UltraSky.normalized(scene.moon[0], scene.moon[1], scene.moon[2], f.moon)
     }
 
     /** The sun by day and the moon by night — each where its light comes from — with a halo and, on Ultra, light shafts. */

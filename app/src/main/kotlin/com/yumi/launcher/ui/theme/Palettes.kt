@@ -19,13 +19,28 @@ fun colorScheme(palette: Palette, dark: Boolean): ColorScheme = schemes.getOrPut
         Palette.Pink -> pastel(Hues(primary = 355f, secondary = 320f, tertiary = 175f), dark)
         // Sky with lavender and butter.
         Palette.Blue -> pastel(Hues(primary = 240f, secondary = 285f, tertiary = 75f), dark)
+        // Lavender with periwinkle and rose.
+        Palette.Lavender -> pastel(Hues(primary = 300f, secondary = 265f, tertiary = 350f), dark)
+        // Cherry with raspberry and leaf green.
+        Palette.Cherry -> pastel(Hues(primary = 15f, secondary = 350f, tertiary = 150f), dark)
+        // Peach with coral and sea.
+        Palette.Peach -> pastel(Hues(primary = 45f, secondary = 25f, tertiary = 195f), dark)
+        // Amber with caramel and sage: warm browns in the dark, like a lamp-lit room.
+        Palette.Amber -> pastel(Hues(primary = 70f, secondary = 50f, tertiary = 135f), dark)
+        // Sea glass with steel blue and sand.
+        Palette.Teal -> pastel(Hues(primary = 195f, secondary = 225f, tertiary = 60f), dark)
+        // Near-grey with a breath of steel: for those who want the island to be the only colour.
+        Palette.Graphite -> pastel(Hues(primary = 255f, secondary = 230f, tertiary = 60f, chroma = 0.14f), dark)
     }
 }
 
 private val schemes = java.util.concurrent.ConcurrentHashMap<Pair<Palette, Boolean>, ColorScheme>()
 
-/** Hues in OKLCH degrees: the accent, and the two quiet colours beside it. */
-private class Hues(val primary: Float, val secondary: Float, val tertiary: Float)
+/**
+ * Hues in OKLCH degrees: the accent, and the two quiet colours beside it. [chroma] scales every
+ * colour's chroma — below 1 the palette greys out while keeping the same lightness steps.
+ */
+private class Hues(val primary: Float, val secondary: Float, val tertiary: Float, val chroma: Float = 1f)
 
 /**
  * A pastel scheme built from three hues. Built in OKLCH rather than picked by hand, so every
@@ -34,28 +49,29 @@ private class Hues(val primary: Float, val secondary: Float, val tertiary: Float
  * tinted with the accent instead of plain grey.
  */
 private fun pastel(h: Hues, dark: Boolean): ColorScheme {
+    fun tone(l: Float, c: Float, hue: Float) = oklch(l, c * h.chroma, hue)
     // Surfaces take a trace of the accent; the text on them stays close to neutral.
-    fun neutral(l: Float, c: Float = 0.012f) = oklch(l, c, h.primary)
+    fun neutral(l: Float, c: Float = 0.012f) = tone(l, c, h.primary)
     val error = if (dark) YumiDarkColors else YumiLightColors
     return if (!dark) {
         lightColorScheme(
             // White on the accent, as in Glacier: the Yumi mark, the play button, picked buttons. The
             // accent is deep enough for that, and for text in it — links, the greeting — on the surface.
-            primary = oklch(0.60f, 0.115f, h.primary),
+            primary = tone(0.60f, 0.115f, h.primary),
             onPrimary = Color.White,
-            primaryContainer = oklch(0.925f, 0.045f, h.primary),
-            onPrimaryContainer = oklch(0.30f, 0.070f, h.primary),
-            inversePrimary = oklch(0.84f, 0.080f, h.primary),
+            primaryContainer = tone(0.925f, 0.045f, h.primary),
+            onPrimaryContainer = tone(0.30f, 0.070f, h.primary),
+            inversePrimary = tone(0.84f, 0.080f, h.primary),
 
-            secondary = oklch(0.62f, 0.080f, h.secondary),
-            onSecondary = oklch(0.22f, 0.045f, h.secondary),
-            secondaryContainer = oklch(0.925f, 0.040f, h.secondary),
-            onSecondaryContainer = oklch(0.30f, 0.055f, h.secondary),
+            secondary = tone(0.62f, 0.080f, h.secondary),
+            onSecondary = tone(0.22f, 0.045f, h.secondary),
+            secondaryContainer = tone(0.925f, 0.040f, h.secondary),
+            onSecondaryContainer = tone(0.30f, 0.055f, h.secondary),
 
-            tertiary = oklch(0.62f, 0.090f, h.tertiary),
-            onTertiary = oklch(0.22f, 0.050f, h.tertiary),
-            tertiaryContainer = oklch(0.925f, 0.045f, h.tertiary),
-            onTertiaryContainer = oklch(0.30f, 0.060f, h.tertiary),
+            tertiary = tone(0.62f, 0.090f, h.tertiary),
+            onTertiary = tone(0.22f, 0.050f, h.tertiary),
+            tertiaryContainer = tone(0.925f, 0.045f, h.tertiary),
+            onTertiaryContainer = tone(0.30f, 0.060f, h.tertiary),
 
             error = error.error,
             onError = error.onError,
@@ -68,7 +84,7 @@ private fun pastel(h: Hues, dark: Boolean): ColorScheme {
             onSurface = neutral(0.21f, 0.015f),
             surfaceVariant = neutral(0.905f, 0.020f),
             onSurfaceVariant = neutral(0.46f, 0.030f),
-            surfaceTint = oklch(0.60f, 0.115f, h.primary),
+            surfaceTint = tone(0.60f, 0.115f, h.primary),
 
             surfaceBright = Color.White,
             surfaceDim = neutral(0.88f, 0.016f),
@@ -87,21 +103,21 @@ private fun pastel(h: Hues, dark: Boolean): ColorScheme {
         )
     } else {
         darkColorScheme(
-            primary = oklch(0.84f, 0.085f, h.primary),
-            onPrimary = oklch(0.26f, 0.055f, h.primary),
-            primaryContainer = oklch(0.34f, 0.060f, h.primary),
-            onPrimaryContainer = oklch(0.91f, 0.045f, h.primary),
-            inversePrimary = oklch(0.62f, 0.110f, h.primary),
+            primary = tone(0.84f, 0.085f, h.primary),
+            onPrimary = tone(0.26f, 0.055f, h.primary),
+            primaryContainer = tone(0.34f, 0.060f, h.primary),
+            onPrimaryContainer = tone(0.91f, 0.045f, h.primary),
+            inversePrimary = tone(0.62f, 0.110f, h.primary),
 
-            secondary = oklch(0.82f, 0.065f, h.secondary),
-            onSecondary = oklch(0.25f, 0.045f, h.secondary),
-            secondaryContainer = oklch(0.33f, 0.045f, h.secondary),
-            onSecondaryContainer = oklch(0.90f, 0.040f, h.secondary),
+            secondary = tone(0.82f, 0.065f, h.secondary),
+            onSecondary = tone(0.25f, 0.045f, h.secondary),
+            secondaryContainer = tone(0.33f, 0.045f, h.secondary),
+            onSecondaryContainer = tone(0.90f, 0.040f, h.secondary),
 
-            tertiary = oklch(0.83f, 0.075f, h.tertiary),
-            onTertiary = oklch(0.25f, 0.050f, h.tertiary),
-            tertiaryContainer = oklch(0.34f, 0.050f, h.tertiary),
-            onTertiaryContainer = oklch(0.91f, 0.045f, h.tertiary),
+            tertiary = tone(0.83f, 0.075f, h.tertiary),
+            onTertiary = tone(0.25f, 0.050f, h.tertiary),
+            tertiaryContainer = tone(0.34f, 0.050f, h.tertiary),
+            onTertiaryContainer = tone(0.91f, 0.045f, h.tertiary),
 
             error = error.error,
             onError = error.onError,
@@ -114,7 +130,7 @@ private fun pastel(h: Hues, dark: Boolean): ColorScheme {
             onSurface = neutral(0.93f, 0.012f),
             surfaceVariant = neutral(0.31f, 0.018f),
             onSurfaceVariant = neutral(0.74f, 0.022f),
-            surfaceTint = oklch(0.84f, 0.085f, h.primary),
+            surfaceTint = tone(0.84f, 0.085f, h.primary),
 
             surfaceBright = neutral(0.31f, 0.016f),
             surfaceDim = neutral(0.15f, 0.010f),

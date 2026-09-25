@@ -10,7 +10,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,9 +36,7 @@ import java.security.MessageDigest
  */
 @Composable
 fun RemoteIcon(url: String?, fallback: ImageVector, size: Dp, modifier: Modifier = Modifier) {
-    val image by produceState(url?.let(ImageCache::memory), url) {
-        if (url != null && value == null) value = ImageCache.load(url)
-    }
+    val image = rememberRemoteImage(url)
     val scheme = MaterialTheme.colorScheme
     Box(
         modifier.size(size).clip(RoundedCornerShape(size * 0.28f)).background(scheme.surfaceContainerHighest),
@@ -51,12 +51,23 @@ fun RemoteIcon(url: String?, fallback: ImageVector, size: Dp, modifier: Modifier
 /** A picture from the web — a screenshot in a mod's gallery — cropped to fill [modifier]'s size. */
 @Composable
 fun RemoteImage(url: String, modifier: Modifier = Modifier) {
-    val image by produceState(ImageCache.memory(url), url) {
-        if (value == null) value = ImageCache.load(url)
-    }
+    val image = rememberRemoteImage(url)
     Box(modifier.clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
         image?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     }
+}
+
+/**
+ * The picture at [url]: from memory at once when it is there, else once downloaded; null while it
+ * loads and when there is none. The state is keyed by the URL, so a slot that goes on to show
+ * something else — the selected pack, a row of a menu — shows the new picture or none, never the
+ * one it had before. [disk] off for images that change under the same URL.
+ */
+@Composable
+internal fun rememberRemoteImage(url: String?, disk: Boolean = true): ImageBitmap? {
+    val image = remember(url) { mutableStateOf(url?.let(ImageCache::memory)) }
+    LaunchedEffect(url) { if (url != null && image.value == null) image.value = ImageCache.load(url, disk) }
+    return image.value
 }
 
 /** Downloaded images by URL: in memory for the session and, unless told otherwise, on disk between sessions. */

@@ -2,7 +2,9 @@ package com.yumi.launcher.ui.home
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -27,12 +29,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
@@ -64,7 +67,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.skiko.GraphicsApi
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.WindowState
 import com.yumi.launcher.data.Instance
@@ -77,6 +82,7 @@ import com.yumi.launcher.scene.VoxelBackground
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.AfterLaunch
 import com.yumi.launcher.settings.LauncherSettings
+import com.yumi.launcher.settings.SceneMotion
 import com.yumi.launcher.ui.components.Avatar
 import com.yumi.launcher.ui.components.ModalCard
 import com.yumi.launcher.ui.components.SkinHead
@@ -110,6 +116,14 @@ fun FrameWindowScope.LauncherApp(
     val model = remember { LauncherModel(settings, scope) }
     val state = remember { LauncherState().also { onState(it, model) } }
     val parallax = remember { Parallax() }
+
+    // The first launch shows the newcomer around, once the island is up behind the guide.
+    LaunchedEffect(Unit) {
+        if (!settings.guideDone) {
+            delay(1200)
+            state.guide.start(state)
+        }
+    }
 
     // A running server has no window of its own: closing the launcher asks first, then stops it properly.
     var confirmClose by remember { mutableStateOf(false) }
@@ -145,11 +159,17 @@ fun FrameWindowScope.LauncherApp(
     }
 
     Box(
-        Modifier.fillMaxSize().onPointerEvent(PointerEventType.Move) { event ->
-            val p = event.changes.first().position
-            parallax.x = p.x / size.width * 2 - 1
-            parallax.y = p.y / size.height * 2 - 1
-        },
+        Modifier.fillMaxSize()
+            .onPointerEvent(PointerEventType.Move) { event ->
+                val p = event.changes.first().position
+                parallax.x = p.x / size.width * 2 - 1
+                parallax.y = p.y / size.height * 2 - 1
+            }
+            // With the camera on the pointer, the wheel turns the island — where no list has scrolled with it.
+            .onPointerEvent(PointerEventType.Scroll) { event ->
+                val change = event.changes.first()
+                if (settings.sceneMotion == SceneMotion.Mouse && !change.isConsumed) parallax.spin += change.scrollDelta.y * 0.18f
+            },
     ) {
         // Nothing here sits on a Surface, so the content colour has to be set once for the window —
         // left alone it stays Material's default black, which the dark theme cannot survive.
@@ -164,6 +184,7 @@ fun FrameWindowScope.LauncherApp(
                 spot = state.section.spot,
                 modifier = Modifier.fillMaxSize(),
                 running = !windowState.isMinimized && !(settings.scenePausedInGame && model.status is PlayStatus.Running),
+                shaders = window.renderApi != GraphicsApi.SOFTWARE_FAST && window.renderApi != GraphicsApi.SOFTWARE_COMPAT,
             )
             // Underneath the bar, so the pills keep their clicks and the gaps between them drag the window.
             WindowDraggableArea(Modifier.fillMaxWidth().height(88.dp)) { Box(Modifier.fillMaxSize()) }
@@ -171,6 +192,18 @@ fun FrameWindowScope.LauncherApp(
                 TopBar(model, state, windowState, requestClose)
             }
             ScreenCard(model, state, play, Modifier.padding(start = 16.dp, top = 88.dp, bottom = 16.dp))
+            // A catalogue's filters, in their own panel right of the card, while its list is on screen.
+            val filters = state.filters?.takeIf { state.section == Section.Mods || state.section == Section.Packs }
+            var shownFilters by remember { mutableStateOf(filters) }
+            if (filters != null) shownFilters = filters
+            AnimatedVisibility(
+                filters != null,
+                modifier = Modifier.padding(start = 16.dp + CATALOG_WIDTH + FILTERS_GAP, top = 88.dp, bottom = 16.dp),
+                enter = fadeIn(tween(260, delayMillis = 120)) + slideInHorizontally(spring(dampingRatio = 0.8f, stiffness = 320f)) { -it / 5 },
+                exit = fadeOut(tween(140)) + slideOutHorizontally(tween(200)) { -it / 5 },
+            ) {
+                shownFilters?.let { FiltersPanel(model, state, it) }
+            }
             // Only the home screen has news; elsewhere the corner belongs to the island, where the
             // camera has flown to that section's place.
             AnimatedVisibility(
@@ -190,6 +223,7 @@ fun FrameWindowScope.LauncherApp(
             ) {
                 FriendsCard(
                     model,
+                    modifier = Modifier.guide(state, GuideAnchor.Friends),
                     hidden = settings.friendsHidden,
                     onHiddenChange = { settings.friendsHidden = it },
                     onJoin = { pack, address -> play(pack, address) },
@@ -200,7 +234,9 @@ fun FrameWindowScope.LauncherApp(
             if (state.elySignIn) ElySignIn(model, onClose = { state.elySignIn = false })
             if (state.microsoftSignIn) MicrosoftSignIn(model, onClose = { state.microsoftSignIn = false })
             state.serverPack?.let { ServerPackDialog(model, it, onJoin = { pack, address -> play(pack, address) }, onClose = { state.serverPack = null }) }
+            if (model.feedback.open) FeedbackCard(model.feedback)
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
+            GuideOverlay(state, settings)
             ResizeEdges(windowState)
         }
     }
@@ -234,7 +270,14 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
                         checkedContentColor = scheme.onPrimary,
                     ),
                     contentPadding = PaddingValues(start = 14.dp, end = 18.dp),
-                    modifier = Modifier.height(44.dp),
+                    modifier = Modifier.height(44.dp).then(
+                        when (section) {
+                            Section.Mods -> Modifier.guide(state, GuideAnchor.Mods)
+                            Section.Packs -> Modifier.guide(state, GuideAnchor.Packs)
+                            Section.Servers -> Modifier.guide(state, GuideAnchor.Servers)
+                            else -> Modifier
+                        },
+                    ),
                 ) {
                     Icon(section.icon, null, Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
@@ -248,28 +291,38 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = {}, Modifier.size(44.dp)) { Icon(Icons.Outlined.Download, "Загрузки") }
+            IconButton(onClick = { model.feedback.open = true }, Modifier.size(44.dp).guide(state, GuideAnchor.Feedback)) {
+                Icon(Icons.Outlined.Feedback, "Обратная связь")
+            }
+            DownloadsButton(model, Modifier.guide(state, GuideAnchor.Downloads))
             IconButton(onClick = {}, Modifier.size(44.dp)) {
                 BadgedBox(badge = { Badge() }) { Icon(Icons.Outlined.Notifications, "Уведомления") }
             }
             val inSettings = state.section == Section.Settings
             IconButton(
                 onClick = { state.section = if (inSettings) Section.Home else Section.Settings },
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(44.dp).guide(state, GuideAnchor.Settings),
                 colors = if (inSettings) IconButtonDefaults.filledIconButtonColors() else IconButtonDefaults.iconButtonColors(),
             ) { Icon(Icons.Outlined.Settings, "Настройки") }
-            Box(
-                Modifier.size(44.dp).clip(CircleShape)
-                    .clickable(role = Role.Button) { state.section = Section.Home }
-                    .semantics { contentDescription = "Профиль: ${model.playerName.ifBlank { "без ника" }}" },
-                contentAlignment = Alignment.Center,
-            ) {
-                val ely = model.ely.session.takeIf { model.settings.account == AccountKind.ElyBy }
-                val microsoft = model.microsoft.session.takeIf { model.settings.account == AccountKind.Microsoft }
-                when {
-                    ely != null -> SkinHead(model.ely.skin, 40.dp)
-                    microsoft != null -> SkinHead(microsoft.skin, 40.dp)
-                    else -> Avatar(offline = true, size = 40.dp)
+            // The face of the account that plays; pressed, every account to switch to.
+            var accounts by remember { mutableStateOf(false) }
+            Box {
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape)
+                        .clickable(role = Role.Button) { accounts = true }
+                        .semantics { contentDescription = "Аккаунт: ${model.playerName.ifBlank { "без ника" }}" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val ely = model.ely.session.takeIf { model.settings.account == AccountKind.ElyBy }
+                    val microsoft = model.microsoft.session.takeIf { model.settings.account == AccountKind.Microsoft }
+                    when {
+                        ely != null -> SkinHead(model.ely.skin, 40.dp)
+                        microsoft != null -> SkinHead(microsoft.skin, 40.dp)
+                        else -> Avatar(offline = true, size = 40.dp)
+                    }
+                }
+                DropdownMenu(accounts, onDismissRequest = { accounts = false }, shape = RoundedCornerShape(20.dp)) {
+                    AccountMenuItems(model, state, onDone = { accounts = false })
                 }
             }
         }
@@ -282,7 +335,7 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
 private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instance?, String?) -> Unit, modifier: Modifier) {
     val target = when (state.section) {
         Section.Home -> 440.dp
-        Section.Mods, Section.Packs, Section.Servers -> 620.dp
+        Section.Mods, Section.Packs, Section.Servers -> CATALOG_WIDTH
         else -> 520.dp
     }
     val width by animateDpAsState(target, spring(dampingRatio = 0.8f, stiffness = 380f))
@@ -295,6 +348,7 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
                 Section.Home -> HomeScreen(model, state, onPlay = { play(null, null) })
                 Section.Packs -> PacksScreen(
                     model,
+                    state,
                     request = state.packRequest,
                     onRequestHandled = { state.packRequest = null },
                     onPlay = { instance ->
@@ -303,8 +357,8 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
                         play(null, null)
                     },
                 )
-                Section.Mods -> ModsScreen(model, onEditPack = { state.openPacks(PackRequest.Edit(it.id)) })
-                Section.Settings -> SettingsScreen(model)
+                Section.Mods -> ModsScreen(model, state, onEditPack = { state.openPacks(PackRequest.Edit(it.id)) })
+                Section.Settings -> SettingsScreen(model, onGuide = { state.guide.start(state) })
                 Section.Console -> ConsoleScreen(model)
                 Section.Servers -> ServersScreen(
                     model,
@@ -318,6 +372,9 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
         }
     }
 }
+
+/** The card's width on the screens that list things; the filters panel starts right of it. */
+private val CATALOG_WIDTH = 620.dp
 
 /** Closing with servers up: they are stopped with `stop` — worlds saved — and then the launcher goes. */
 @Composable

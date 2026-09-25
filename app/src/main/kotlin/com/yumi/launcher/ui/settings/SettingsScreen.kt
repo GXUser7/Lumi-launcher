@@ -27,8 +27,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.FolderOpen
+import com.yumi.launcher.core.Support
 import androidx.compose.material.icons.rounded.Coffee
+import androidx.compose.material.icons.rounded.Tour
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,7 +72,7 @@ import com.yumi.launcher.ui.packs.MemorySlider
 import java.io.File
 
 @Composable
-fun SettingsScreen(model: LauncherModel) {
+fun SettingsScreen(model: LauncherModel, onGuide: () -> Unit = {}) {
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
@@ -90,6 +94,12 @@ fun SettingsScreen(model: LauncherModel) {
                 Palette.Green -> "Пастельная мята с фисташковым и абрикосовым."
                 Palette.Pink -> "Пастельная сакура с сиреневым и мятным."
                 Palette.Blue -> "Пастельное небо с лавандовым и сливочным."
+                Palette.Lavender -> "Лаванда с васильковым и розовым."
+                Palette.Cherry -> "Вишня с малиновым и листовым зелёным."
+                Palette.Peach -> "Персик с коралловым и морской волной."
+                Palette.Amber -> "Янтарь с карамелью и шалфеем — тёплая, как комната с лампой."
+                Palette.Teal -> "Морское стекло со стальным синим и песочным."
+                Palette.Graphite -> "Почти без цвета — пусть цветным будет только остров."
             },
         )
 
@@ -101,7 +111,7 @@ fun SettingsScreen(model: LauncherModel) {
                 SceneQuality.Low -> "Блоки без текстур и простой свет — для слабых компьютеров."
                 SceneQuality.Medium -> "Текстуры, мягкий свет в углах, свет от факелов и фонарей, текущая вода и лава."
                 SceneQuality.High -> "Плюс тени от солнца и луны, ореолы и блики у огней, блики от солнца, дым, искры, светлячки и далёкие острова."
-                SceneQuality.Ultra -> "Всё сразу: лучи света, северное сияние, падающие звёзды, листва на ветру, блики на воде, тени облаков, птицы."
+                SceneQuality.Ultra -> "Всё сразу: живые облака сверху и море облаков внизу, звёздное небо с Млечным Путём, туман, лучи света, северное сияние, листва на ветру, блики на воде, птицы. Нужна видеокарта."
             },
         )
         Label("Кадров в секунду")
@@ -111,7 +121,7 @@ fun SettingsScreen(model: LauncherModel) {
         Hint(
             when (settings.sceneMotion) {
                 SceneMotion.Rotate -> "Остров медленно поворачивается сам."
-                SceneMotion.Mouse -> "Камера следует за курсором."
+                SceneMotion.Mouse -> "Камера следует за курсором, а колёсико мыши поворачивает остров."
                 SceneMotion.Both -> "Остров поворачивается и немного отзывается на курсор."
             },
         )
@@ -204,8 +214,28 @@ fun SettingsScreen(model: LauncherModel) {
             Hint("Удаление убирает вас у всех друзей и освобождает имя.")
         }
 
+        Group("Поддержка")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = model.feedback::openChat, shapes = ButtonDefaults.shapes()) {
+                Icon(Icons.Outlined.Chat, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Написать разработчику")
+            }
+            OutlinedButton(onClick = { model.feedback.open = true; model.feedback.sendLog() }, shapes = ButtonDefaults.shapes()) {
+                Icon(Icons.Outlined.BugReport, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Отправить лог")
+            }
+        }
+        Hint("Telegram @${Support.TELEGRAM}. Лог собирается в архив без токенов и паролей и копируется — останется вставить его в чат.")
+        OutlinedButton(onClick = onGuide, shapes = ButtonDefaults.shapes()) {
+            Icon(Icons.Rounded.Tour, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Пройти обучение ещё раз")
+        }
+
         Spacer(Modifier.height(4.dp))
-        Text("Yumi Launcher 0.1.0", style = type.labelMedium, color = scheme.outline)
+        Text("Yumi Launcher ${Support.VERSION}", style = type.labelMedium, color = scheme.outline)
     }
 }
 
@@ -253,34 +283,44 @@ private fun GameFolder(model: LauncherModel) {
  */
 @Composable
 internal fun PalettePicker(selected: Palette, dark: Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f, onSelect: (Palette) -> Unit) {
+    // Five to a row: ten swatches in one row would shrink each below its own label.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Palette.entries.chunked(PALETTES_PER_ROW).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { palette -> PaletteSwatch(palette, palette == selected, dark, Modifier.weight(1f)) { onSelect(palette) } }
+                repeat(PALETTES_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+private const val PALETTES_PER_ROW = 5
+
+@Composable
+private fun PaletteSwatch(palette: Palette, picked: Boolean, dark: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Palette.entries.forEach { palette ->
-            val colors = colorScheme(palette, dark)
-            val picked = palette == selected
-            Surface(
-                onClick = { onSelect(palette) },
-                shape = RoundedCornerShape(22.dp),
-                color = if (picked) scheme.surfaceContainerHighest else LocalFieldContainer.current ?: scheme.surfaceContainer,
-                border = if (picked) BorderStroke(2.dp, scheme.primary) else null,
-                modifier = Modifier.weight(1f).semantics { role = Role.RadioButton; this.selected = picked },
-            ) {
-                Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Canvas(Modifier.size(48.dp)) {
-                            drawArc(colors.primary, 180f, 180f, useCenter = true)
-                            drawArc(colors.tertiaryContainer, 90f, 90f, useCenter = true)
-                            drawArc(colors.secondaryContainer, 0f, 90f, useCenter = true)
-                        }
-                        if (picked) {
-                            Box(Modifier.size(22.dp).clip(CircleShape).background(colors.onPrimary), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = colors.primary)
-                            }
-                        }
+    val colors = colorScheme(palette, dark)
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(22.dp),
+        color = if (picked) scheme.surfaceContainerHighest else LocalFieldContainer.current ?: scheme.surfaceContainer,
+        border = if (picked) BorderStroke(2.dp, scheme.primary) else null,
+        modifier = modifier.semantics { role = Role.RadioButton; this.selected = picked },
+    ) {
+        Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(44.dp)) {
+                    drawArc(colors.primary, 180f, 180f, useCenter = true)
+                    drawArc(colors.tertiaryContainer, 90f, 90f, useCenter = true)
+                    drawArc(colors.secondaryContainer, 0f, 90f, useCenter = true)
+                }
+                if (picked) {
+                    Box(Modifier.size(22.dp).clip(CircleShape).background(colors.onPrimary), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = colors.primary)
                     }
-                    Text(palette.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 }
             }
+            Text(palette.label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

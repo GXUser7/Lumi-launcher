@@ -14,18 +14,29 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.yumi.launcher.core.ContentType
+import com.yumi.launcher.core.LauncherLog
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.PackArchives
+import com.yumi.launcher.core.SkippedFile
 import com.yumi.launcher.core.ServerMods
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PackCheck
 import com.yumi.launcher.data.ServerStatus
+import com.yumi.launcher.scene.sceneShot
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.settings.Palette
+import com.yumi.launcher.settings.SavedAccount
 import com.yumi.launcher.settings.SceneMotion
 import com.yumi.launcher.settings.SceneQuality
 import com.yumi.launcher.settings.ThemeMode
@@ -44,6 +55,7 @@ import kotlinx.coroutines.runBlocking
 import java.awt.Dimension
 import java.awt.Rectangle
 import java.awt.Robot
+import java.awt.Toolkit
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
 import java.io.File
@@ -63,7 +75,11 @@ fun main(args: Array<String>) {
         "--options-test" -> exitProcess(optionsTest(args.drop(1)))
         "--world-test" -> exitProcess(worldTest(args.drop(1)))
         "--friends-test" -> exitProcess(friendsTest(args.drop(1)))
+        "--content-test" -> exitProcess(contentTest(args.drop(1)))
+        "--scene-shot" -> exitProcess(sceneShot(args.drop(1)))
     }
+    // The launcher's own log, for "Отправить лог"; a smoke run leaves the real one alone.
+    if ("--ui-smoke" !in args) LauncherLog.install()
     // Native-looking Swing dialogs: the folder chooser is Swing's, and its default look is from 2006.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     launcher(args)
@@ -84,7 +100,7 @@ private fun menuPacks(args: List<String>): Int {
 
 private fun packTest(args: List<String>): Int = runBlocking {
     if (args.size < 2) {
-        println("Использование: --pack-test <архив.mrpack|архив.zip> <тестовая папка> [ключ CurseForge — по умолчанию из настроек]")
+        println("Использование: --pack-test <архив.mrpack|архив.zip> <тестовая папка> [ключ CurseForge — по умолчанию из настроек] [--plan — только спросить CurseForge, что и откуда скачается]")
         return@runBlocking 2
     }
     try {
@@ -92,8 +108,16 @@ private fun packTest(args: List<String>): Int = runBlocking {
         val folder = File(args[1])
         val info = PackArchives.inspect(archive)
         // The key from the launcher's settings unless one is given, so it need not show in the command line.
-        val key = args.getOrNull(2) ?: LauncherSettings().curseForgeKey.trim()
-        PackArchives.install(archive, folder, key) {}
+        val key = args.getOrNull(2)?.takeIf { !it.startsWith("--") } ?: LauncherSettings().curseForgeKey.trim()
+        if ("--plan" in args) {
+            val plan = PackArchives.planCurseForge(archive, folder, key)
+            val byFolder = plan.downloads.groupingBy { it.target.parentFile.name }.eachCount()
+            println("${info.name}: скачается ${plan.downloads.size} ($byFolder), из ручных загрузок ${plan.copies.size}, пропущено ${plan.skipped.size}")
+            plan.skipped.forEach { println("  пропущен: ${it.kind} «${it.name}» → ${it.folder}. ${it.page}") }
+            return@runBlocking 0
+        }
+        val skipped = PackArchives.install(archive, folder, key) {}
+        skipped.forEach { println("Пропущен: ${it.kind} «${it.name}» → ${it.folder}. ${it.page}") }
         ServerMods.sync(folder.resolve("minecraft/mods"), folder.resolve("hosted/mods"), emptySet(), folder.resolve("server"))
         println("${info.name}: ${info.loader.label} ${info.version}, клиент=${folder.resolve("minecraft").walkTopDown().count { it.isFile }}, сервер=${folder.resolve("hosted").walkTopDown().count { it.isFile }}")
         0
@@ -120,6 +144,14 @@ private fun launcher(args: Array<String>) = application {
                 // A saved world for the creation form; smoke never launches Minecraft with it.
                 File(it.gameDir, "instances/smoke-fabric/minecraft/saves/Выживание с друзьями").apply { mkdirs() }
                     .resolve("level.dat").writeText("smoke world")
+                // The guide is photographed on purpose below, not over every other shot.
+                it.guideDone = true
+                // A nick in the slot and two accounts waiting in the switcher.
+                it.nick = "YumiPlayer"
+                it.savedAccounts = listOf(
+                    SavedAccount(AccountKind.Offline, "Builder_Alex"),
+                    SavedAccount(AccountKind.ElyBy, "Dima", uuid = "00000000000000000000000000000002"),
+                )
                 // Friends from a running friends server, when the run is given one: "address|name|token".
                 it.friendsServer = ""
                 it.friendsToken = ""
@@ -133,7 +165,10 @@ private fun launcher(args: Array<String>) = application {
                     resolve("yumi-server.json").writeText(
                         """{"id":"smoke-server","name":"Сервер для друзей","packId":"smoke-fabric","version":"1.21.1","loader":"Fabric","memoryMb":4096}""",
                     )
-                    resolve("server.properties").writeText("server-port=25565\nmotd=§bYumi §7— §aвыживание с друзьями\nmax-players=10\n")
+                    resolve("server.properties").writeText("server-port=25565\nmotd=§bYumi §7— §aвыживание с друзьями\nmax-players=10\nwhite-list=true\nenforce-whitelist=true\n")
+                    resolve("whitelist.json").writeText(
+                        """[{"uuid":"4a2f0bb1-4c7e-3a05-8a7f-2a4d1b0e7c11","name":"YumiPlayer"},{"uuid":"5b3e1cc2-5d8f-3b16-9b80-3b5e2c1f8d22","name":"Builder_Alex"}]""",
+                    )
                     resolve("banned-players.json").writeText(
                         """[{"uuid":"00000000-0000-0000-0000-000000000001","name":"Griefer228","created":"2026-09-20 18:04:11 +0500","source":"Server","expires":"forever","reason":"Сломал спавн"},""" +
                             """{"uuid":"00000000-0000-0000-0000-000000000002","name":"Spammer","created":"2026-09-22 10:00:00 +0500","source":"Steve","expires":"2026-10-12 14:00:00 +0500","reason":"Banned by an operator."}]""",
@@ -154,7 +189,29 @@ private fun launcher(args: Array<String>) = application {
     var smokeModel by remember { mutableStateOf<LauncherModel?>(null) }
     // Alt+F4 and the taskbar's "close" go through the launcher, which may have servers to stop first.
     var closeRequests by remember { mutableIntStateOf(0) }
-    Window(onCloseRequest = { closeRequests++ }, state = windowState, title = "Yumi", icon = icon, undecorated = true) {
+    // F11: full screen and back to however the window was before — maximised or not.
+    var beforeFullscreen by remember { mutableStateOf(WindowPlacement.Floating) }
+    val fullscreenKey: (KeyEvent) -> Boolean = { event ->
+        if (event.key == Key.F11 && event.type == KeyEventType.KeyDown) {
+            if (windowState.placement == WindowPlacement.Fullscreen) {
+                windowState.placement = beforeFullscreen
+            } else {
+                beforeFullscreen = windowState.placement
+                windowState.placement = WindowPlacement.Fullscreen
+            }
+            true
+        } else {
+            false
+        }
+    }
+    Window(
+        onCloseRequest = { closeRequests++ },
+        state = windowState,
+        title = "Yumi",
+        icon = icon,
+        undecorated = true,
+        onPreviewKeyEvent = fullscreenKey,
+    ) {
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(1100, 720)
             if (smoke) {
@@ -172,6 +229,10 @@ private fun launcher(args: Array<String>) = application {
                     val area = Rectangle(window.contentPane.locationOnScreen, window.contentPane.size)
                     ImageIO.write(Robot().createScreenCapture(area), "png", File(output, "$name.png"))
                 }
+                // Synthetic input goes through the event queue, not straight to the component: this code
+                // runs inside Compose's own dispatcher, and an event handled on the spot makes Compose run
+                // its queued work — this very coroutine among it — re-entrantly, which kills the run.
+                val events = Toolkit.getDefaultToolkit().systemEventQueue
                 // Presses the left button over the window at x, y without moving the real pointer.
                 fun click(x: Int, y: Int) {
                     val target = SwingUtilities.getDeepestComponentAt(window.contentPane, x, y) ?: return
@@ -179,14 +240,14 @@ private fun launcher(args: Array<String>) = application {
                     val time = System.currentTimeMillis()
                     for (id in listOf(MouseEvent.MOUSE_MOVED, MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED)) {
                         val mask = if (id == MouseEvent.MOUSE_MOVED) 0 else MouseEvent.BUTTON1_DOWN_MASK
-                        target.dispatchEvent(MouseEvent(target, id, time, if (id == MouseEvent.MOUSE_RELEASED) 0 else mask, at.x, at.y, 1, false, MouseEvent.BUTTON1))
+                        events.postEvent(MouseEvent(target, id, time, if (id == MouseEvent.MOUSE_RELEASED) 0 else mask, at.x, at.y, 1, false, MouseEvent.BUTTON1))
                     }
                 }
                 // Turns the wheel over the window at x, y without moving the real pointer.
                 fun wheel(x: Int, y: Int, clicks: Int) {
                     val target = SwingUtilities.getDeepestComponentAt(window.contentPane, x, y) ?: return
                     val at = SwingUtilities.convertPoint(window.contentPane, x, y, target)
-                    target.dispatchEvent(
+                    events.postEvent(
                         MouseWheelEvent(target, MouseEvent.MOUSE_WHEEL, System.currentTimeMillis(), 0, at.x, at.y, 0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 3, clicks),
                     )
                 }
@@ -195,6 +256,26 @@ private fun launcher(args: Array<String>) = application {
                     settings.theme = theme
                     settings.account = AccountKind.Offline
                     shot("home-$suffix", 4000) { state.section = Section.Home }
+                    // The account switcher under the account on the home screen.
+                    shot("accounts-$suffix", 1200) { click(230, 320) }
+                    click(1000, 600)
+                    delay(400)
+                    // The downloads panel under its button, with what finished and what failed.
+                    shot("downloads-$suffix", 1200) {
+                        smokeModel?.downloads?.apply {
+                            clear()
+                            record("Iris Shaders", "мод", null)
+                            record("Complementary Shaders - Reimagined", "шейдер", null)
+                            record("Fresh Animations", "набор ресурсов", "Нет связи с Modrinth")
+                        }
+                        click(945, 44)
+                    }
+                    click(1000, 600)
+                    delay(400)
+                    // The newcomer's guide: its first card, a step on the home screen, one that opens a section, the last.
+                    for (step in listOf(0, 1, 3, 5, 9, 11)) shot("guide-$step-$suffix", 1800) { state.guide.step = step }
+                    state.guide.step = null
+                    state.section = Section.Home
                     shot("news-hidden-$suffix", 1200) { settings.newsHidden = true }
                     // Both corners folded away: only the island and the two pills to bring them back.
                     shot("folded-$suffix", 1200) { settings.friendsHidden = true }
@@ -211,12 +292,32 @@ private fun launcher(args: Array<String>) = application {
                     }
                     shot("packs-$suffix", 3000) { state.section = Section.Packs }
                     shot("pack-import-$suffix", 3000) { state.section = Section.Packs; state.packRequest = PackRequest.Import }
+                    // A CurseForge pack that came in without two resource packs its authors keep off launchers.
+                    shot("pack-skipped-$suffix", 1500) {
+                        state.section = Section.Packs
+                        smokeModel?.packImports?.apply {
+                            finished = smokeModel?.selected
+                            skipped = listOf(
+                                SkippedFile("Текстурпак", "Deceasedcraft Screen Tweak 1.20.1.zip", "resourcepacks", "https://www.curseforge.com/minecraft/texture-packs/deceasedcraft-screen-tweak/files/7194089"),
+                                SkippedFile("Текстурпак", "Itsme64's no potion particles [1.5.1].zip", "resourcepacks", "https://www.curseforge.com/minecraft/texture-packs/no-potion-particles/files/4607236"),
+                            )
+                        }
+                    }
+                    smokeModel?.packImports?.apply { finished = null; skipped = emptyList() }
                     shot("pack-editor-$suffix", 1400) { state.section = Section.Packs; state.packRequest = PackRequest.Edit("smoke-fabric") }
                     // Further down: how the pack starts, and last its game's menus.
                     shot("pack-editor-launch-$suffix", 1200) { wheel(270, 500, 9) }
                     shot("pack-editor-menu-$suffix", 1200) { wheel(270, 500, 40) }
                     shot("mods-$suffix", 5000) { state.section = Section.Mods }
+                    // Shaders — with the card offering Iris, the smoke pack has none — and resource packs.
+                    smokeModel?.let { m ->
+                        shot("mods-shaders-$suffix", 5000) { state.section = Section.Mods; m.mods.show(m.selected, ContentType.Shader) }
+                        shot("mods-resourcepacks-$suffix", 5000) { state.section = Section.Mods; m.mods.show(m.selected, ContentType.ResourcePack) }
+                        m.mods.show(m.selected, ContentType.Mod)
+                    }
                     shot("settings-$suffix", 3000) { state.section = Section.Settings }
+                    shot("feedback-$suffix", 1200) { smokeModel?.feedback?.open = true }
+                    smokeModel?.feedback?.open = false
                     // The game group — memory, Java, shared game settings — is at the bottom.
                     // The island's group, down to "Во время игры".
                     shot("settings-scene-$suffix", 1200) { wheel(270, 500, 6) }
@@ -256,6 +357,11 @@ private fun launcher(args: Array<String>) = application {
                         state.section = Section.Servers
                         state.serverView = ServerView.Detail("smoke-server")
                         state.serverTab = ServerTab.Settings
+                    }
+                    shot("server-whitelist-$suffix", 1500) {
+                        state.section = Section.Servers
+                        state.serverView = ServerView.Detail("smoke-server")
+                        state.serverTab = ServerTab.Whitelist
                     }
                     shot("server-bans-$suffix", 1500) {
                         state.section = Section.Servers
@@ -307,10 +413,23 @@ private fun launcher(args: Array<String>) = application {
                     }
                 }
                 settings.sceneQuality = SceneQuality.Ultra
+                // With the camera on the pointer the wheel turns the island: before and after a few notches.
+                settings.theme = ThemeMode.Light
+                shot("wheel-before", 1500) { state.section = Section.Home }
+                shot("wheel-after", 1500) { repeat(6) { wheel(900, 420, 3) } }
                 settings.sceneMotion = SceneMotion.Both
+                // F11, as the player presses it: the window takes the whole screen, and gives it back.
+                if (only == null || only.any { it in "fullscreen" }) {
+                    val robot = Robot()
+                    shot("fullscreen", 1500) { robot.keyPress(java.awt.event.KeyEvent.VK_F11); robot.keyRelease(java.awt.event.KeyEvent.VK_F11) }
+                    robot.keyPress(java.awt.event.KeyEvent.VK_F11)
+                    robot.keyRelease(java.awt.event.KeyEvent.VK_F11)
+                    delay(1000)
+                    println("После второго F11: ${windowState.placement}")
+                }
                 shot("scene-flight", 950) { state.section = Section.Mods }
                 // Each pastel palette, on the screens that show the most of it.
-                for (palette in listOf(Palette.Green, Palette.Pink, Palette.Blue)) {
+                for (palette in Palette.entries.filter { it != Palette.Original }) {
                     settings.palette = palette
                     for (theme in listOf(ThemeMode.Light, ThemeMode.Dark)) {
                         val suffix = "${palette.name.lowercase()}-${theme.name.lowercase()}"

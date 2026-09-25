@@ -189,14 +189,19 @@ internal fun ServerDetail(
         }
         if (status is ServerStatus.Failed) FailureBanner(status.message)
         AddressCard(model, profile, session, onJoin)
-        ChoiceGroup(tabs, tab.takeIf { it in tabs } ?: ServerTab.Console, { it.label }, onTab, height = 44.dp) {
-            Icon(it.icon, null, Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
+        // Five tabs share the card: only the open one wears its glyph, or the labels would not fit.
+        val current = tab.takeIf { it in tabs } ?: ServerTab.Console
+        ChoiceGroup(tabs, current, { it.label }, onTab, height = 44.dp) {
+            if (it == current) {
+                Icon(it.icon, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+            }
         }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             when (tab.takeIf { it in tabs } ?: ServerTab.Console) {
                 ServerTab.Console -> Terminal(model, profile, session)
                 ServerTab.Settings -> ServerSettings(model, profile, session, onDeleted = onBack)
+                ServerTab.Whitelist -> Whitelist(model, profile, session)
                 ServerTab.Bans -> BannedPlayers(model, profile, session)
                 ServerTab.Mods -> ServerMods(model, profile, session)
             }
@@ -828,7 +833,7 @@ private fun ServerSettings(model: LauncherModel, profile: ServerProfile, session
                 ToggleRow("PvP", form.pvp, { form = form.copy(pvp = it) }, icon = Icons.Rounded.SportsMartialArts, description = "Игроки могут бить друг друга")
                 ToggleRow(
                     "Белый список", form.whitelist, { form = form.copy(whitelist = it) }, icon = Icons.Rounded.VerifiedUser,
-                    description = if (form.whitelist) "Пускает только добавленных: whitelist add ник в терминале" else "Зайти может любой, кто знает адрес",
+                    description = if (form.whitelist) "Пускает только добавленных — список во вкладке «Вайтлист»" else "Зайти может любой, кто знает адрес",
                 )
                 ToggleRow("Разрешить полёт", form.flight, { form = form.copy(flight = it) }, icon = Icons.Rounded.Flight, description = "Без этого сервер выгоняет за полёт — нужно модам с джетпаками")
                 ToggleRow("Командные блоки", form.commandBlocks, { form = form.copy(commandBlocks = it) }, icon = Icons.Rounded.Code)
@@ -1019,7 +1024,7 @@ private fun BanRow(player: BannedPlayer, canPardon: Boolean, onPardon: () -> Uni
 }
 
 @Composable
-private fun EmptyState(icon: ImageVector, title: String, text: String) {
+internal fun EmptyState(icon: ImageVector, title: String, text: String) {
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ShapeTile(icon, scheme.secondaryContainer, scheme.onSecondaryContainer, 64.dp)

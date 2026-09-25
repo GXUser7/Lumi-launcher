@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.yumi.launcher.core.AuthlibInjector
+import com.yumi.launcher.core.GameLauncher
+import com.yumi.launcher.core.Http
+import com.yumi.launcher.core.HttpRefused
 import com.yumi.launcher.core.LauncherJson
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.Loader
@@ -23,12 +26,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.net.Inet4Address
+import java.net.URLEncoder
 import java.net.NetworkInterface
 import java.util.concurrent.TimeUnit
 
@@ -82,6 +87,10 @@ data class BannedPlayer(
     /** Who banned: a player's name, or "Server" for the console. */
     val source: String = "",
 )
+
+/** Minecraft's whitelist.json entry. */
+@Serializable
+data class WhitelistEntry(val uuid: String = "", val name: String)
 
 sealed interface ServerStatus {
     data object Stopped : ServerStatus
@@ -206,6 +215,86 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
                 file.writeText(LauncherJson.encodeToString(JsonArray.serializer(), JsonArray(kept)))
             }
         }
+    }
+
+    fun whitelistFile(profile: ServerProfile): File = folder(profile).resolve("whitelist.json")
+
+    fun whitelist(profile: ServerProfile): List<WhitelistEntry> {
+        val file = whitelistFile(profile)
+        return if (file.isFile) LauncherJson.decodeFromString(file.readText()) else emptyList()
+    }
+
+    fun whitelistOn(profile: ServerProfile): Boolean = properties(profile).bool("white-list", false)
+
+    /**
+     * Turns the whitelist on or off. A running server is told with `whitelist on|off` and saves
+     * that itself; a stopped one gets it in `server.properties`, with `enforce-whitelist` alongside,
+     * so someone taken off the list is also put out of the game. Starting or stopping — neither.
+     */
+    fun setWhitelist(profile: ServerProfile, on: Boolean) {
+        val session = session(profile.id)
+        when {
+            session.status is ServerStatus.Running -> send(profile.id, "whitelist ${if (on) "on" else "off"}")
+            session.status.active -> Unit
+            else -> properties(profile).apply {
+                this["white-list"] = on.toString()
+                this["enforce-whitelist"] = on.toString()
+                save()
+            }
+        }
+    }
+
+    /**
+     * Puts [name] on the whitelist. A running server does it with `whitelist add` — it looks the
+     * player up itself; for a stopped one the entry is written here, with the uuid the server will
+     * know the player by: the offline one for a server anyone can join, else the account's from
+     * Mojang or Ely.by. Throws with a message for the player when there is no such account.
+     */
+    suspend fun whitelistAdd(profile: ServerProfile, name: String) {
+        val session = session(profile.id)
+        when {
+            session.status is ServerStatus.Running -> send(profile.id, "whitelist add $name")
+            session.status.active -> error("Сервер запускается или выключается — добавьте чуть позже")
+            else -> {
+                val uuid = withContext(Dispatchers.IO) { accountUuid(profile.auth, name) } ?: error("Аккаунта «$name» нет ${if (profile.auth == ServerAuth.ElyBy) "на Ely.by" else "в Minecraft"}")
+                withContext(Dispatchers.IO) {
+                    val kept = whitelist(profile).filterNot { it.name.equals(name, ignoreCase = true) }
+                    writeWhitelist(profile, kept + WhitelistEntry(uuid, name))
+                }
+            }
+        }
+    }
+
+    /** Takes [name] off the whitelist: `whitelist remove` on a running server, the file on a stopped one. */
+    fun whitelistRemove(profile: ServerProfile, name: String) {
+        val session = session(profile.id)
+        when {
+            session.status is ServerStatus.Running -> send(profile.id, "whitelist remove $name")
+            session.status.active -> Unit
+            else -> writeWhitelist(profile, whitelist(profile).filterNot { it.name.equals(name, ignoreCase = true) })
+        }
+    }
+
+    private fun writeWhitelist(profile: ServerProfile, entries: List<WhitelistEntry>) {
+        whitelistFile(profile).writeText(LauncherJson.encodeToString(ListSerializer(WhitelistEntry.serializer()), entries))
+    }
+
+    /** The uuid, with dashes, a server of [auth] knows [name] by; null when the account does not exist. */
+    private suspend fun accountUuid(auth: ServerAuth, name: String): String? {
+        val hex = when (auth) {
+            ServerAuth.Offline -> GameLauncher.offlineUuid(name)
+            ServerAuth.Mojang, ServerAuth.ElyBy -> {
+                val api = if (auth == ServerAuth.Mojang) "https://api.mojang.com/users/profiles/minecraft/" else "https://authserver.ely.by/api/users/profiles/minecraft/"
+                val text = try {
+                    Http.text(api + URLEncoder.encode(name, Charsets.UTF_8))
+                } catch (e: HttpRefused) {
+                    return null
+                }
+                if (text.isBlank()) return null
+                LauncherJson.parseToJsonElement(text).jsonObject["id"]?.jsonPrimitive?.content ?: return null
+            }
+        }
+        return "${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}"
     }
 
     fun session(id: String): ServerSession = synchronized(sessions) { sessions.getOrPut(id) { ServerSession() } }

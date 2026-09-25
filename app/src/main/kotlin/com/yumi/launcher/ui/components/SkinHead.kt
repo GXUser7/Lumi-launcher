@@ -10,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,9 +25,7 @@ import androidx.compose.ui.unit.IntSize
  */
 @Composable
 fun SkinHead(skinUrl: String?, size: Dp, modifier: Modifier = Modifier) {
-    val skin by produceState(skinUrl?.let(ImageCache::memory), skinUrl) {
-        if (skinUrl != null && value == null) value = ImageCache.load(skinUrl, disk = false)
-    }
+    val skin = rememberRemoteImage(skinUrl, disk = false)
     Box(
         modifier.size(size).clip(MaterialShapes.Cookie9Sided.toShape()).background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.Center,
