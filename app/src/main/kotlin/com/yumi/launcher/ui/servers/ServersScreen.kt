@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.DriveFileRenameOutline
 import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.UnfoldMore
@@ -45,14 +47,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.SavedWorlds
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ServerAuth
@@ -89,6 +95,10 @@ import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
 import com.yumi.launcher.ui.packs.MemorySlider
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.net.URI
 
@@ -282,10 +292,33 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
     var port by remember { mutableStateOf(model.servers.freePort().toString()) }
     var memory by remember { mutableIntStateOf(if (pack?.loader == Loader.Vanilla) 2048 else 4096) }
     var eula by remember { mutableStateOf(model.settings.serverEulaAccepted) }
+    val scope = rememberCoroutineScope()
+    var creating by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var world by remember(pack?.id) { mutableStateOf<String?>(null) }
+    var worlds by remember(pack?.id) { mutableStateOf<List<String>?>(null) }
+    var worldsError by remember(pack?.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(pack?.id, model.instances.root, model.busy) {
+        worlds = null
+        worldsError = null
+        try {
+            val gameDir = pack?.let { model.instances.gameDir(it) }
+            worlds = withContext(Dispatchers.IO) { gameDir?.let(SavedWorlds::list).orEmpty() }
+            if (world !in worlds.orEmpty()) world = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            worldsError = e.message ?: "Не удалось прочитать миры сборки"
+        }
+    }
     val portValue = port.toIntOrNull()?.takeIf { it in 1024..65535 }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Header("Новый сервер", onBack)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Header("Новый сервер", { if (!creating) onBack() })
+        if (creating) Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            LoadingIndicator()
+            Text(if (world == null) "Создаём сервер…" else "Копируем мир…", style = MaterialTheme.typography.titleMedium)
+            Hint("Дождитесь завершения")
+        } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FormSection("Сервер", Icons.Rounded.Dns, subtitle = "Повторяет сборку: ту же версию, загрузчик и моды") {
                 Field(
                     value = name,
@@ -301,6 +334,18 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                         pack == null -> "Сначала создайте сборку — сервер повторяет её версию и моды."
                         pack.loader == Loader.Vanilla -> "Ванильный сервер Minecraft ${pack.version}."
                         else -> "Сервер получит Minecraft ${pack.version}, ${pack.loader.label} и моды сборки — кроме тех, что нужны только игроку: Sodium, Iris, миникарты."
+                    },
+                )
+                WorldField(worlds.orEmpty(), world, pack != null && worlds != null) { world = it; error = null }
+                Hint(
+                    when {
+                        worldsError != null -> worldsError!!
+                        pack == null -> "Выберите сборку, чтобы увидеть её миры."
+                        worlds == null -> "Ищем сохранённые миры…"
+                        world != null && model.busy -> "Закройте игру перед копированием мира."
+                        world != null -> "Мир скопируется на сервер. Исходный мир останется в сборке."
+                        worlds.orEmpty().isEmpty() -> "В этой сборке пока нет сохранённых миров. Новый мир создастся при запуске сервера."
+                        else -> "Создайте новый мир или выберите папку сохранения из сборки."
                     },
                 )
             }
@@ -350,16 +395,31 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                 }
             }
         }
+        error?.let { Text(it, color = scheme.error, style = MaterialTheme.typography.bodySmall) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(
                 onClick = {
                     val chosen = pack ?: return@Button
+                    val chosenPort = portValue ?: return@Button
                     model.withGameFolder {
                         model.settings.serverEulaAccepted = true
-                        onCreated(model.servers.create(name, chosen, portValue!!, auth, memory))
+                        creating = true
+                        error = null
+                        scope.launch {
+                            try {
+                                onCreated(model.servers.create(name, chosen, chosenPort, auth, memory, world))
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                error = "Не удалось создать сервер: ${e.message ?: "проверьте доступ к папке игры"}"
+                            } finally {
+                                creating = false
+                            }
+                        }
                     }
                 },
-                enabled = name.isNotBlank() && pack != null && eula && portValue != null,
+                enabled = !creating && name.isNotBlank() && pack != null && eula && portValue != null &&
+                    (world == null || (worlds != null && !model.busy)),
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.height(48.dp),
             ) {
@@ -370,13 +430,45 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
             Spacer(Modifier.width(12.dp))
             Hint(
                 when {
+                    creating -> "Подготавливаем файлы"
                     name.isBlank() -> "Придумайте название"
                     pack == null -> "Нужна сборка"
                     !eula -> "Отметьте согласие с EULA"
+                    world != null && model.busy -> "Сначала закройте игру"
                     else -> "Скачается при первом запуске"
                 },
                 Modifier.weight(1f),
             )
+        }
+    }
+}
+
+@Composable
+private fun WorldField(worlds: List<String>, selected: String?, enabled: Boolean, onPick: (String?) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            onClick = { open = true },
+            enabled = enabled,
+            shape = FieldShape,
+            color = LocalFieldContainer.current ?: scheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth().height(64.dp),
+        ) {
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Rounded.Public, null, tint = scheme.onSurfaceVariant)
+                Column(Modifier.weight(1f)) {
+                    Text("Мир", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                    Text(selected ?: "Новый мир", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Icon(Icons.Rounded.UnfoldMore, "Выбрать мир", tint = scheme.onSurfaceVariant)
+            }
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 300.dp), shape = RoundedCornerShape(20.dp)) {
+            DropdownMenuItem(text = { Text("Новый мир") }, onClick = { onPick(null); open = false })
+            worlds.forEach { name ->
+                DropdownMenuItem(text = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { onPick(name); open = false })
+            }
         }
     }
 }

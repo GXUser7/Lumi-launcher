@@ -34,8 +34,11 @@ internal object ServerMods {
             if (to.resolve(jar.name + ".disabled").exists()) continue
             if (!target.isFile || target.length() != jar.length()) jar.copyTo(target, overwrite = true)
         }
+        // A selected save (or an already played world) must not acquire chunks from the pack's template.
+        val keepWorld = to.parentFile.resolve("world/level.dat").isFile
         staged?.takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.forEach { file ->
             val path = file.relativeTo(staged).invariantSeparatorsPath
+            if (keepWorld && path.startsWith("world/")) return@forEach
             if (path in setOf("eula.txt", "server.properties", "yumi-server.json")) return@forEach
             if (file in clientOnly) return@forEach
             val target = to.parentFile.resolve(path)

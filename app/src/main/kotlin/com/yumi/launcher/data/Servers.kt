@@ -12,10 +12,12 @@ import com.yumi.launcher.core.Loaders
 import com.yumi.launcher.core.PackShare
 import com.yumi.launcher.core.ServerInstaller
 import com.yumi.launcher.core.ServerMods
+import com.yumi.launcher.core.SavedWorlds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -216,34 +218,50 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
         return generateSequence(25565) { it + 1 }.first { it !in taken }
     }
 
-    fun create(name: String, pack: Instance, port: Int, auth: ServerAuth, memoryMb: Int): ServerProfile {
+    suspend fun create(name: String, pack: Instance, port: Int, auth: ServerAuth, memoryMb: Int, world: String? = null): ServerProfile {
+        check(world == null || !model.busy) { "Закройте игру перед копированием мира" }
         val id = folderId(name, "server") { root.resolve(it).exists() || this[it] != null }
         val profile = ServerProfile(
             id = id, name = name.trim(), packId = pack.id, version = pack.version, loader = pack.loader,
             loaderVersion = pack.loaderVersion, icon = pack.icon, memoryMb = memoryMb, auth = auth,
         )
         val dir = folder(profile)
-        dir.mkdirs()
-        // Asked in the form that created it; the server refuses to start without this line.
-        dir.resolve("eula.txt").writeText("# https://aka.ms/MinecraftEULA — accepted in Yumi Launcher\neula=true\n")
-        properties(profile).apply {
-            val numeric = numericProperties(profile.version)
-            this["server-port"] = port.toString()
-            this["motd"] = profile.name
-            this["online-mode"] = (auth != ServerAuth.Offline).toString()
-            this["max-players"] = "10"
-            this["gamemode"] = if (numeric) "0" else GameMode.Survival.key
-            this["difficulty"] = if (numeric) "2" else Difficulty.Normal.key
-            this["pvp"] = "true"
-            this["white-list"] = "false"
-            this["spawn-protection"] = "0"
-            // Modded worlds fly — jetpacks, gliders — and vanilla's kick for flying catches them.
-            if (profile.loader != Loader.Vanilla) this["allow-flight"] = "true"
-            // Chat signing needs Mojang's keys, which an offline player does not have.
-            this["enforce-secure-profile"] = "false"
-            save()
+        val gameDir = model.instances.gameDir(pack)
+        var created = false
+        try {
+            withContext(Dispatchers.IO) {
+                root.mkdirs()
+                check(dir.mkdir()) { "Не удалось создать папку сервера — проверьте доступ к папке игры" }
+                created = true
+                if (world != null) SavedWorlds.copy(gameDir, world, dir.resolve("world"))
+                // Asked in the form that created it; the server refuses to start without this line.
+                dir.resolve("eula.txt").writeText("# https://aka.ms/MinecraftEULA — accepted in Yumi Launcher\neula=true\n")
+                ServerProperties(dir.resolve("server.properties")).apply {
+                    val numeric = numericProperties(profile.version)
+                    this["server-port"] = port.toString()
+                    this["motd"] = profile.name
+                    this["online-mode"] = (auth != ServerAuth.Offline).toString()
+                    this["max-players"] = "10"
+                    this["gamemode"] = if (numeric) "0" else GameMode.Survival.key
+                    this["difficulty"] = if (numeric) "2" else Difficulty.Normal.key
+                    this["pvp"] = "true"
+                    this["white-list"] = "false"
+                    this["spawn-protection"] = "0"
+                    this["level-name"] = "world"
+                    // Modded worlds fly — jetpacks, gliders — and vanilla's kick for flying catches them.
+                    if (profile.loader != Loader.Vanilla) this["allow-flight"] = "true"
+                    // Chat signing needs Mojang's keys, which an offline player does not have.
+                    this["enforce-secure-profile"] = "false"
+                    save()
+                }
+                dir.resolve(FILE).writeText(LauncherJson.encodeToString(ServerProfile.serializer(), profile))
+            }
+        } catch (e: Exception) {
+            // A failed or cancelled copy must not leave a launchable half-world behind.
+            if (created) withContext(NonCancellable + Dispatchers.IO) { dir.deleteRecursively() }
+            throw e
         }
-        save(profile)
+        all.add(0, profile)
         if (profile.loader != Loader.Vanilla || model.instances.folder(pack).resolve("server").isDirectory) syncMods(profile)
         return profile
     }

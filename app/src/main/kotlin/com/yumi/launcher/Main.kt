@@ -61,6 +61,7 @@ fun main(args: Array<String>) {
         "--pack-test" -> exitProcess(packTest(args.drop(1)))
         "--menu-packs" -> exitProcess(menuPacks(args.drop(1)))
         "--options-test" -> exitProcess(optionsTest(args.drop(1)))
+        "--world-test" -> exitProcess(worldTest(args.drop(1)))
         "--friends-test" -> exitProcess(friendsTest(args.drop(1)))
     }
     // Native-looking Swing dialogs: the folder chooser is Swing's, and its default look is from 2006.
@@ -116,6 +117,9 @@ private fun launcher(args: Array<String>) = application {
                 File(it.gameDir, "instances/smoke-fabric").apply { mkdirs() }.resolve("instance.json")
                     .writeText("""{"id":"smoke-fabric","name":"Fabric 1.21.1","version":"1.21.1","loader":"Fabric","menuStyle":{"palette":"Pink","dark":false,"font":true}}""")
                 it.selectedInstance = "smoke-fabric"
+                // A saved world for the creation form; smoke never launches Minecraft with it.
+                File(it.gameDir, "instances/smoke-fabric/minecraft/saves/Выживание с друзьями").apply { mkdirs() }
+                    .resolve("level.dat").writeText("smoke world")
                 // Friends from a running friends server, when the run is given one: "address|name|token".
                 it.friendsServer = ""
                 it.friendsToken = ""
@@ -258,10 +262,12 @@ private fun launcher(args: Array<String>) = application {
                         state.serverView = ServerView.Detail("smoke-server")
                         state.serverTab = ServerTab.Bans
                     }
-                    shot("server-create-$suffix", 1200) {
+                    shot("server-create-$suffix", 2500) {
                         state.section = Section.Servers
                         state.serverView = ServerView.Create
                     }
+                    shot("server-create-worlds-$suffix", 1000) { click(320, 460) }
+                    shot("server-create-selected-$suffix", 1000) { click(230, 572) }
                     shot("quick-join-$suffix", 6000) {
                         state.section = Section.Servers
                         state.serverView = ServerView.List
