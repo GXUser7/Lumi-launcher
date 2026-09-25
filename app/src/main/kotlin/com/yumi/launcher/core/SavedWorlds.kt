@@ -8,8 +8,44 @@ import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.StandardOpenOption.READ
 
+/**
+ * A world in a pack's `saves`, as the game's own world list shows it: its [name] from `level.dat` —
+ * which two worlds may share — and the [folder] that tells them apart, when it was last played,
+ * the game mode (0 survival, 1 creative, 2 adventure, 3 spectator), and the version it was saved in.
+ */
+internal data class SavedWorld(
+    val folder: String,
+    val name: String,
+    val lastPlayed: Long,
+    val mode: Int?,
+    val hardcore: Boolean,
+    val cheats: Boolean,
+    val version: String?,
+    val icon: File?,
+)
+
 /** Singleplayer saves are copied whole: dimensions, datapacks and mod data belong to the world. */
 internal object SavedWorlds {
+    /**
+     * The worlds in [gameDir], described from their `level.dat`, the last played first — as the
+     * game lists them. A `level.dat` that cannot be read still lists its world, by its folder.
+     */
+    fun describe(gameDir: File): List<SavedWorld> = list(gameDir).map { folder ->
+        val dir = gameDir.resolve("saves").resolve(folder)
+        val level = dir.resolve("level.dat")
+        val data = runCatching { Nbt.read(level)["Data"] as? Map<*, *> }.getOrNull()
+        SavedWorld(
+            folder = folder,
+            name = (data?.get("LevelName") as? String)?.takeIf { it.isNotBlank() } ?: folder,
+            lastPlayed = (data?.get("LastPlayed") as? Long)?.takeIf { it > 0 } ?: level.lastModified(),
+            mode = data?.get("GameType") as? Int,
+            hardcore = (data?.get("hardcore") as? Byte)?.toInt() == 1,
+            cheats = (data?.get("allowCommands") as? Byte)?.toInt() == 1,
+            version = ((data?.get("Version") as? Map<*, *>)?.get("Name") as? String)?.takeIf { it.isNotBlank() },
+            icon = dir.resolve("icon.png").takeIf { it.isFile },
+        )
+    }.sortedByDescending { it.lastPlayed }
+
     fun list(gameDir: File): List<String> {
         val saves = gameDir.resolve("saves")
         if (!saves.exists()) return emptyList()

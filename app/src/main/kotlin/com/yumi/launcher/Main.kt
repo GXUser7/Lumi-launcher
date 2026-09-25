@@ -58,7 +58,10 @@ import java.awt.Robot
 import java.awt.Toolkit
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
+import java.util.zip.GZIPOutputStream
 import java.util.prefs.Preferences
 import javax.imageio.ImageIO
 import javax.swing.SwingUtilities
@@ -141,9 +144,16 @@ private fun launcher(args: Array<String>) = application {
                 File(it.gameDir, "instances/smoke-fabric").apply { mkdirs() }.resolve("instance.json")
                     .writeText("""{"id":"smoke-fabric","name":"Fabric 1.21.1","version":"1.21.1","loader":"Fabric","menuStyle":{"palette":"Pink","dark":false,"font":true}}""")
                 it.selectedInstance = "smoke-fabric"
-                // A saved world for the creation form; smoke never launches Minecraft with it.
-                File(it.gameDir, "instances/smoke-fabric/minecraft/saves/Выживание с друзьями").apply { mkdirs() }
-                    .resolve("level.dat").writeText("smoke world")
+                // Saved worlds for the creation form — two of them under one name, as the game allows;
+                // smoke never launches Minecraft with them.
+                val saves = File(it.gameDir, "instances/smoke-fabric/minecraft/saves")
+                val now = System.currentTimeMillis()
+                for ((folder, level) in listOf(
+                    "Выживание с друзьями" to smokeLevel("Выживание с друзьями", 0, now - 2 * 3_600_000L),
+                    "Выживание с друзьями (1)" to smokeLevel("Выживание с друзьями", 0, now - 3 * 86_400_000L, cheats = true),
+                    "Постройки" to smokeLevel("Город у моря", 1, now - 10 * 86_400_000L),
+                ) + (1..40).map { n -> "Испытание $n" to smokeLevel("Испытание $n", n % 4, now - (20L + n) * 86_400_000L) }
+                ) saves.resolve(folder).apply { mkdirs() }.resolve("level.dat").writeBytes(level)
                 // The guide is photographed on purpose below, not over every other shot.
                 it.guideDone = true
                 // A nick in the slot and two accounts waiting in the switcher.
@@ -372,8 +382,10 @@ private fun launcher(args: Array<String>) = application {
                         state.section = Section.Servers
                         state.serverView = ServerView.Create
                     }
-                    shot("server-create-worlds-$suffix", 1000) { click(320, 460) }
-                    shot("server-create-selected-$suffix", 1000) { click(230, 572) }
+                    // The second of the two same-named worlds, picked by its card.
+                    shot("server-create-selected-$suffix", 1000) { click(300, 640) }
+                    // A pack with dozens of worlds: all of them, in the window with the search.
+                    shot("server-create-all-worlds-$suffix", 1200) { click(530, 453) }
                     shot("quick-join-$suffix", 6000) {
                         state.section = Section.Servers
                         state.serverView = ServerView.List
@@ -459,6 +471,26 @@ private fun launcher(args: Array<String>) = application {
             )
         }
     }
+}
+
+/** A `level.dat` as the game writes it, with what the world list reads from it — for the smoke run's saved worlds. */
+private fun smokeLevel(name: String, mode: Int, lastPlayed: Long, cheats: Boolean = false): ByteArray {
+    val bytes = ByteArrayOutputStream()
+    DataOutputStream(GZIPOutputStream(bytes)).use { out ->
+        out.writeByte(10); out.writeUTF("")
+        out.writeByte(10); out.writeUTF("Data")
+        out.writeByte(8); out.writeUTF("LevelName"); out.writeUTF(name)
+        out.writeByte(4); out.writeUTF("LastPlayed"); out.writeLong(lastPlayed)
+        out.writeByte(3); out.writeUTF("GameType"); out.writeInt(mode)
+        out.writeByte(1); out.writeUTF("hardcore"); out.writeByte(0)
+        out.writeByte(1); out.writeUTF("allowCommands"); out.writeByte(if (cheats) 1 else 0)
+        out.writeByte(10); out.writeUTF("Version")
+        out.writeByte(8); out.writeUTF("Name"); out.writeUTF("1.21.1")
+        out.writeByte(0)
+        out.writeByte(0)
+        out.writeByte(0)
+    }
+    return bytes.toByteArray()
 }
 
 /** What the smoke run's terminal shows: a server that has just come up and two friends joining it. */

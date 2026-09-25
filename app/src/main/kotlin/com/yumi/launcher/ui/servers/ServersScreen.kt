@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Loader
+import com.yumi.launcher.core.SavedWorld
 import com.yumi.launcher.core.SavedWorlds
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
@@ -296,15 +297,15 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var world by remember(pack?.id) { mutableStateOf<String?>(null) }
-    var worlds by remember(pack?.id) { mutableStateOf<List<String>?>(null) }
+    var worlds by remember(pack?.id) { mutableStateOf<List<SavedWorld>?>(null) }
     var worldsError by remember(pack?.id) { mutableStateOf<String?>(null) }
     LaunchedEffect(pack?.id, model.instances.root, model.busy) {
         worlds = null
         worldsError = null
         try {
             val gameDir = pack?.let { model.instances.gameDir(it) }
-            worlds = withContext(Dispatchers.IO) { gameDir?.let(SavedWorlds::list).orEmpty() }
-            if (world !in worlds.orEmpty()) world = null
+            worlds = withContext(Dispatchers.IO) { gameDir?.let(SavedWorlds::describe).orEmpty() }
+            if (worlds.orEmpty().none { it.folder == world }) world = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -316,7 +317,10 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
         Header("Новый сервер", { if (!creating) onBack() })
         if (creating) Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             LoadingIndicator()
-            Text(if (world == null) "Создаём сервер…" else "Копируем мир…", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (world == null) "Создаём сервер…" else "Копируем мир «${worlds?.firstOrNull { it.folder == world }?.name ?: world}»…",
+                style = MaterialTheme.typography.titleMedium,
+            )
             Hint("Дождитесь завершения")
         } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FormSection("Сервер", Icons.Rounded.Dns, subtitle = "Повторяет сборку: ту же версию, загрузчик и моды") {
@@ -336,7 +340,7 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                         else -> "Сервер получит Minecraft ${pack.version}, ${pack.loader.label} и моды сборки — кроме тех, что нужны только игроку: Sodium, Iris, миникарты."
                     },
                 )
-                WorldField(worlds.orEmpty(), world, pack != null && worlds != null) { world = it; error = null }
+                WorldPicker(worlds.orEmpty(), world, pack != null && worlds != null) { world = it; error = null }
                 Hint(
                     when {
                         worldsError != null -> worldsError!!
@@ -345,7 +349,7 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                         world != null && model.busy -> "Закройте игру перед копированием мира."
                         world != null -> "Мир скопируется на сервер. Исходный мир останется в сборке."
                         worlds.orEmpty().isEmpty() -> "В этой сборке пока нет сохранённых миров. Новый мир создастся при запуске сервера."
-                        else -> "Создайте новый мир или выберите папку сохранения из сборки."
+                        else -> "Новый мир или один из миров сборки — он скопируется на сервер со всеми измерениями и данными модов."
                     },
                 )
             }
@@ -439,36 +443,6 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                 },
                 Modifier.weight(1f),
             )
-        }
-    }
-}
-
-@Composable
-private fun WorldField(worlds: List<String>, selected: String?, enabled: Boolean, onPick: (String?) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    var open by remember { mutableStateOf(false) }
-    Box {
-        Surface(
-            onClick = { open = true },
-            enabled = enabled,
-            shape = FieldShape,
-            color = LocalFieldContainer.current ?: scheme.surfaceContainer,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-        ) {
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Icons.Rounded.Public, null, tint = scheme.onSurfaceVariant)
-                Column(Modifier.weight(1f)) {
-                    Text("Мир", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                    Text(selected ?: "Новый мир", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Icon(Icons.Rounded.UnfoldMore, "Выбрать мир", tint = scheme.onSurfaceVariant)
-            }
-        }
-        DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 300.dp), shape = RoundedCornerShape(20.dp)) {
-            DropdownMenuItem(text = { Text("Новый мир") }, onClick = { onPick(null); open = false })
-            worlds.forEach { name ->
-                DropdownMenuItem(text = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { onPick(name); open = false })
-            }
         }
     }
 }
