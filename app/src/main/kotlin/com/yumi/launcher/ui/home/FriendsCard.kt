@@ -113,8 +113,8 @@ internal fun FriendsCard(
             ) {
                 when {
                     !friends.available -> {
-                        Text("Друзья появятся, когда подключится сервер друзей.", style = MaterialTheme.typography.bodyMedium)
-                        Hint("Его адрес — в «Настройках», раздел «Друзья».")
+                        Text("Друзья появятся, когда вы подключите сервер друзей.", style = MaterialTheme.typography.bodyMedium)
+                        Hint("Поднимите свой сервер (например, на Amvera) и впишите его адрес в «Настройках» → «Друзья». Друзьям нужен тот же адрес.")
                     }
                     !friends.signedIn -> SignUp(model)
                     else -> FriendsList(model, onJoin, onServerPack)

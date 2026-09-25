@@ -56,11 +56,6 @@ internal class FriendsApi(private val base: String, private val token: String = 
     /** The server no longer knows the profile — deleted, or the server started over. */
     class Unauthorized(message: String) : IOException(message)
 
-    companion object {
-        /** The friends server every copy of the launcher talks to, on Amvera; the settings can point elsewhere. */
-        const val DEFAULT_URL = "https://friend-server-zakhuel67.amvera.io"
-    }
-
     suspend fun register(name: String): Pair<String, String> {
         val r = LauncherJson.decodeFromString(Registered.serializer(), call("/api/register", body("name" to name)))
         return r.name to r.token

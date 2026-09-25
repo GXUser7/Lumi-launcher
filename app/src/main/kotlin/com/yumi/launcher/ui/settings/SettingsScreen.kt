@@ -40,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import com.yumi.launcher.core.FriendsApi
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -197,11 +196,11 @@ fun SettingsScreen(model: LauncherModel, onGuide: () -> Unit = {}) {
         Field(
             value = settings.friendsServer,
             onValueChange = { settings.friendsServer = it.trim() },
-            placeholder = FriendsApi.DEFAULT_URL.ifEmpty { "https://имя-проекта.amvera.io" },
+            placeholder = "https://имя-проекта.amvera.io",
             icon = Icons.Rounded.Dns,
             modifier = Modifier.fillMaxWidth(),
         )
-        Hint(if (FriendsApi.DEFAULT_URL.isEmpty()) "Адрес сервера друзей на Amvera. У вас и у друзей он должен быть один и тот же." else "Пусто — общий сервер Yumi. Свой адрес нужен, только если вы подняли свой сервер друзей.")
+        Hint("Адрес своего сервера друзей. Пусто — друзья выключены. У вас и у друзей адрес должен быть один и тот же.")
         if (model.friends.signedIn) {
             var confirmDelete by remember { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -45,7 +45,8 @@ class FriendsModel(private val model: LauncherModel, private val scope: Coroutin
     /** The servers friends are on, and whether a pack here fits the one a Yumi server shares. */
     internal val servers = FriendServers(model, scope)
 
-    val url: String get() = settings.friendsServer.trim().ifEmpty { FriendsApi.DEFAULT_URL }.trimEnd('/')
+    /** No server is built in: players run their own (`friends-server/`) and share its address. */
+    val url: String get() = settings.friendsServer.trim().trimEnd('/')
     val available: Boolean get() = url.isNotEmpty()
     val signedIn: Boolean get() = settings.friendsToken.isNotEmpty()
     val online: Int get() = view?.friends?.count { it.online } ?: 0
