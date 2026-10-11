@@ -11,8 +11,8 @@ AppName=Lumi Launcher
 AppVersion={#AppVersion}
 AppVerName=Lumi Launcher {#AppVersion}
 AppPublisher=Lumi
-AppPublisherURL=https://github.com/GXUser7/yumi-launcher
-AppSupportURL=https://github.com/GXUser7/yumi-launcher/issues
+AppPublisherURL=https://github.com/GXUser7/Lumi-launcher
+AppSupportURL=https://github.com/GXUser7/Lumi-launcher/issues
 ; A game launcher needs no administrator: like Minecraft's own, it goes into the user's programs
 ; (%LOCALAPPDATA%\Programs) and asks no UAC question. /ALLUSERS on the command line still works.
 PrivilegesRequired=lowest
