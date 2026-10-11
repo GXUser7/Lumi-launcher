@@ -591,7 +591,7 @@ private fun MenuSection(model: LauncherModel, draft: Draft) {
     val supported = MenuStyles.supports(model.manifest?.versions?.firstOrNull { it.id == draft.version })
     FormSection("Меню игры", Icons.Rounded.Palette, subtitle = "Главное меню и настройки Minecraft") {
         ToggleRow(
-            "Оформление Yumi",
+            "Оформление Lumi",
             draft.menu != null && supported,
             { on -> draft.menu = if (on) MenuStyle(model.settings.palette, launcherDark) else null },
             description = if (supported) "Кнопки, ползунки, фоны и своя панорама — набор ресурсов, Sodium ему не мешает" else "Нужна версия 1.20.2 или новее",

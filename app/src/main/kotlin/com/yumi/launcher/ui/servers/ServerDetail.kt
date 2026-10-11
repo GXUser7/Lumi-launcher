@@ -496,7 +496,7 @@ private fun Terminal(model: LauncherModel, profile: ServerProfile, session: Serv
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp,
                                     color = when {
-                                        line.startsWith("> ") || line.startsWith("[Yumi]") -> scheme.primary
+                                        line.startsWith("> ") || line.startsWith("[Lumi]") -> scheme.primary
                                         "ERROR" in line || "Exception" in line || "FATAL" in line -> scheme.error
                                         "WARN" in line -> scheme.secondary
                                         else -> scheme.onSurface
@@ -777,7 +777,7 @@ private fun ServerSettings(model: LauncherModel, profile: ServerProfile, session
                     { form = form.copy(sharePack = it) },
                     icon = Icons.Rounded.Inventory2,
                     description = if (form.sharePack) {
-                        "Друзья с Yumi Launcher соберут такую же сборку в «Быстром входе». Список модов прячется в описании — в игре его не видно"
+                        "Друзья с Lumi Launcher соберут такую же сборку в «Быстром входе». Список модов прячется в описании — в игре его не видно"
                     } else {
                         "Друзьям придётся ставить моды самим"
                     },

@@ -55,7 +55,7 @@ private fun pastel(h: Hues, dark: Boolean): ColorScheme {
     val error = if (dark) YumiDarkColors else YumiLightColors
     return if (!dark) {
         lightColorScheme(
-            // White on the accent, as in Glacier: the Yumi mark, the play button, picked buttons. The
+            // White on the accent, as in Glacier: the Lumi mark, the play button, picked buttons. The
             // accent is deep enough for that, and for text in it — links, the greeting — on the surface.
             primary = tone(0.60f, 0.115f, h.primary),
             onPrimary = Color.White,

@@ -94,7 +94,7 @@ class Feedback(private val model: LauncherModel, private val scope: CoroutineSco
     private fun info(pack: Instance?, game: File?): String = buildString {
         val settings: LauncherSettings = model.settings
         val runtime = Runtime.getRuntime()
-        appendLine("Yumi Launcher ${Support.VERSION}")
+        appendLine("Lumi Launcher ${Support.VERSION}")
         appendLine("Собрано: ${LocalDateTime.now()}")
         appendLine("Система: ${System.getProperty("os.name")} ${System.getProperty("os.version")} (${System.getProperty("os.arch")})")
         appendLine("Java лаунчера: ${System.getProperty("java.version")} ${System.getProperty("java.vendor")}")

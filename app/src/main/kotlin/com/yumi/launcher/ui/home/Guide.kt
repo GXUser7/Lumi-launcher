@@ -100,7 +100,7 @@ private class GuideStep(
 
 private val STEPS = listOf(
     GuideStep(
-        null, Icons.Rounded.Tour, "Добро пожаловать в Yumi",
+        null, Icons.Rounded.Tour, "Добро пожаловать в Lumi",
         "Коротко покажем, что где, — это займёт минуту. Листайте стрелками или кнопкой «Далее», Esc — пропустить.",
     ),
     GuideStep(

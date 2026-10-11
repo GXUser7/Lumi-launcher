@@ -74,9 +74,9 @@ internal fun launchTest(all: List<String>): Int = runBlocking {
     gameDir.resolve("options.txt").takeUnless { it.isFile }?.apply { parentFile.mkdirs(); writeText("onboardAccessibility:false\n") }
     val log = root.resolve("launch-$version-${loader.name.lowercase()}.log")
     val account = if (withInjector) {
-        GameAccount("YumiTester", GameLauncher.offlineUuid("YumiTester"), "0", "mojang", AuthlibInjector.ensure())
+        GameAccount("LumiTester", GameLauncher.offlineUuid("LumiTester"), "0", "mojang", AuthlibInjector.ensure())
     } else {
-        GameAccount.offline("YumiTester")
+        GameAccount.offline("LumiTester")
     }
     val command = GameLauncher.command(prepared, LaunchOptions(account, gameDir, 3072, emptyList(), null, null, false, join))
     if (join != null) println("Аргументы входа: " + command.dropWhile { it != "--quickPlayMultiplayer" && it != "--server" }.take(4))
@@ -102,7 +102,7 @@ internal fun launchTest(all: List<String>): Int = runBlocking {
         println("--- про моды ---")
         lines.filter { "mods" in it.lowercase() && ("Loading" in it || "Found" in it) }.take(5).forEach(::println)
         lines.filter { "authlib-injector" in it || "Connecting to" in it }.take(5).forEach(::println)
-        if (menu != null) println("Набор ресурсов " + if (lines.any { "Reloading ResourceManager" in it && "file/Yumi.zip" in it }) "загружен" else "НЕ загружен")
+        if (menu != null) println("Набор ресурсов " + if (lines.any { "Reloading ResourceManager" in it && "file/Lumi.zip" in it }) "загружен" else "НЕ загружен")
         println("--- лог (хвост) ---")
         lines.takeLast(12).forEach(::println)
     }

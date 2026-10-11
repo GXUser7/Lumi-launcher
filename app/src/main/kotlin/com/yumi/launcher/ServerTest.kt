@@ -52,12 +52,12 @@ internal fun serverTest(all: List<String>): Int = runBlocking {
         this["online-mode"] = "false"
         // Loopback only: a test server has no business asking Windows to open the firewall.
         this["server-ip"] = "127.0.0.1"
-        this["motd"] = "§bYumi §fтест"
+        this["motd"] = "§bLumi §fтест"
         if (share != null) {
             val jars = share.listFiles { f -> f.name.endsWith(".jar") }.orEmpty().sortedBy { it.name }
             val pack = PackShare.describe(jars, version, loader, loaderVersion, "")
             println("Раздаём сборку: Modrinth ${pack.modrinth.size}, CurseForge ${pack.curseForge.size}, нигде: ${pack.missing}")
-            this["motd"] = PackShare.withTag("§bYumi §fтест", PackShare.tag(pack))
+            this["motd"] = PackShare.withTag("§bLumi §fтест", PackShare.tag(pack))
         }
         this["level-type"] = if (numericProperties(version)) "FLAT" else "minecraft:flat"
         save()
@@ -86,7 +86,7 @@ internal fun serverTest(all: List<String>): Int = runBlocking {
             pinged = true
             println("PING: «${it.motd.joinToString("") { s -> s.text }}» ${it.version} ${it.online}/${it.max} ${it.latencyMs} мс, иконка: ${it.favicon?.size}")
             println("Моды в пинге: " + when (val hints = it.mods) {
-                is ModHints.Yumi -> "сборка Yumi, ${hints.pack.loader.label} ${hints.pack.minecraft}"
+                is ModHints.Yumi -> "сборка Lumi, ${hints.pack.loader.label} ${hints.pack.minecraft}"
                 is ModHints.Forge -> "Forge: ${hints.mods.joinToString { m -> "${m.id} ${m.version ?: "(только сервер)"}" }}"
                 ModHints.Modded -> "NeoForge, без списка"
                 null -> "ничего"

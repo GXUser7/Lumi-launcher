@@ -1,4 +1,4 @@
-# AGENTS.md — Yumi Launcher
+# AGENTS.md — Lumi Launcher
 
 Инструкция для ИИ-агентов (OpenAI Codex и других), которые работают с этим репозиторием: что это
 за проект, как его собрать и проверить, где что лежит и на какие грабли уже наступали. Прочитай
@@ -6,7 +6,7 @@
 
 ## Проект
 
-- **Yumi Launcher** — лаунчер Minecraft для Windows на Kotlin/JVM и Compose Multiplatform Desktop.
+- **Lumi Launcher** (до 1.1 — Yumi Launcher) — лаунчер Minecraft для Windows на Kotlin/JVM и Compose Multiplatform Desktop.
   Дизайн — Material 3 Expressive, палитра Glacier, шрифт Roboto Flex, вместо картинки на фоне живой
   воксельный 3D-остров.
 - Главная цель владельца — играть с друзьями без лицензии: офлайн-ник, аккаунт Ely.by, свой сервер
@@ -50,14 +50,14 @@ export GRADLE_USER_HOME=C:/Users/000/.gradle    # тёплый кэш с арт�
 трогай — без неё Maven Central на сети владельца обрывает TLS.
 
 **Установщик** — `./scripts/build-installer.ps1 -Offline` (PowerShell): `:app:createDistributable`
-(образ приложения с Java внутри, `includeAllModules`), затем Inno Setup 6 по `installer/YumiLauncher.iss`
-→ `dist/Yumi-Launcher-<версия>-windows-x64-setup.exe` и его SHA-256. `ISCC.exe` ищется в
+(образ приложения с Java внутри, `includeAllModules`), затем Inno Setup 6 по `installer/LumiLauncher.iss`
+→ `dist/Lumi-Launcher-<версия>-windows-x64-setup.exe` и его SHA-256. `ISCC.exe` ищется в
 `.local/tools/inno` (копия из YumiDesktop), потом в Program Files. Ставится для текущего
-пользователя без UAC (`PrivilegesRequired=lowest`, `%LOCALAPPDATA%\Programs\Yumi Launcher`); при
-удалении настройки, `%APPDATA%\YumiLauncher` и папка игры остаются. Версию меняй в двух местах:
-`packageVersion` в `app/build.gradle.kts` и `AppVersion` в `.iss`. `AppId` установщика и
+пользователя без UAC (`PrivilegesRequired=lowest`, `%LOCALAPPDATA%\Programs\Lumi Launcher`); при
+удалении настройки, `%APPDATA%\LumiLauncher` и папка игры остаются. Версию меняй в двух местах:
+`packageVersion` в `app/build.gradle.kts`, `AppVersion` в `.iss` и `Support.VERSION`. `AppId` установщика и
 `upgradeUuid` не менять — по ним обновление находит старую установку. Проверка: тихая установка
-в `.local` (`/VERYSILENT /DIR=…`), запуск установленного `YumiLauncher.exe --ui-smoke --only=…`
+в `.local` (`/VERYSILENT /DIR=…`), запуск установленного `LumiLauncher.exe --ui-smoke --only=…`
 из отдельной рабочей папки, затем `unins000.exe /VERYSILENT`.
 
 Ошибки компиляции ищи так: `./gradlew --offline :app:compileKotlin -q 2>&1 | grep "^e:"`.
@@ -70,7 +70,7 @@ export GRADLE_USER_HOME=C:/Users/000/.gradle    # тёплый кэш с арт�
 
 | Режим | Что делает |
 |---|---|
-| `--ui-smoke [--only=подстрока,…]` | Открывает окно и снимает все экраны в светлой и тёмной теме в `app/.local/screenshots/`: главная (и со свёрнутыми новостями, `folded-*` — свёрнуты и новости, и друзья; снимается вместе с предыдущим: `--only=news-hidden-,folded-`), сборки (список, каталог, редактор), моды, настройки, серверы, страница сервера (консоль, терминал с подсказками команд, настройки, баны), создание сервера, быстрый вход, вход Ely.by, главная с выбранным Microsoft (`ms-home-*`) и окно входа Microsoft (`ms-signin-*` — просит у Microsoft настоящий код); плюс главная и настройки в каждой пастельной палитре; плюс остров на каждом уровне качества днём и ночью с одной точки (`scene-<уровень>-<тема>`) и кадр посреди перелёта камеры (`scene-flight`). `accounts-*` — переключатель аккаунтов на главной, `downloads-*` — панель загрузок, `feedback-*` — обратная связь, `guide-<шаг>-*` — обучение новичка, `mods-shaders-*` и `mods-resourcepacks-*` — шейдеры (с карточкой «нужен Iris») и ресурспаки, `server-whitelist-*` — вайтлист сервера, `wheel-before`/`wheel-after` — остров до и после колёсика (камера «За мышью»), `fullscreen` — после F11 (нажимается настоящим `Robot`, второе нажатие возвращает окно). `pack-editor-launch-*` и `pack-editor-menu-*` — редактор сборки, прокрученный к «Запуску» и к «Меню игры», `quick-join-pack-*` — диалог «Сборка под сервер» для «Сервера Димы» (смоук поднимает его на 127.0.0.1:25599, `SmokeServer.kt`), `quick-join-packed-light` — после нажатия «Создать сборку» (сборка ставится в `.local/smoke-data`), `friend-pack-*` — «Зайти к другу» на Yumi-сервер без своей сборки (только с `YUMI_SMOKE_FRIENDS`, когда друг на сервере и подходящей сборки ещё нет: с ней окно сразу запустило бы игру), `settings-scene-*` — группа острова с «Во время игры», `settings-game-*` — группа «Игра» в настройках, `settings-key-*` — поле ключа CurseForge с отказом CurseForge на ключ-GUID (снимаются вместе с предыдущим кадром: `--only=settings-,pack-editor-`). `--only=server,scene-` снимает только кадры, в имени которых есть одна из подстрок. Настройки и данные — отдельные, пользовательские не трогает. **Обязателен после изменений UI**, снимки нужно посмотреть. |
+| `--ui-smoke [--only=подстрока,…]` | Открывает окно и снимает все экраны в светлой и тёмной теме в `app/.local/screenshots/`: главная (и со свёрнутыми новостями, `folded-*` — свёрнуты и новости, и друзья; снимается вместе с предыдущим: `--only=news-hidden-,folded-`), сборки (список, каталог, редактор), моды, настройки, серверы, страница сервера (консоль, терминал с подсказками команд, настройки, баны), создание сервера, быстрый вход, вход Ely.by, главная с выбранным Microsoft (`ms-home-*`) и окно входа Microsoft (`ms-signin-*` — просит у Microsoft настоящий код); плюс главная и настройки в каждой пастельной палитре; плюс остров на каждом уровне качества днём и ночью с одной точки (`scene-<уровень>-<тема>`) и кадр посреди перелёта камеры (`scene-flight`). `accounts-*` — переключатель аккаунтов на главной, `downloads-*` — панель загрузок, `feedback-*` — обратная связь, `guide-<шаг>-*` — обучение новичка, `mods-shaders-*` и `mods-resourcepacks-*` — шейдеры (с карточкой «нужен Iris») и ресурспаки, `server-whitelist-*` — вайтлист сервера, `wheel-before`/`wheel-after` — остров до и после колёсика (камера «За мышью»), `fullscreen` — после F11 (нажимается настоящим `Robot`, второе нажатие возвращает окно). `pack-editor-launch-*` и `pack-editor-menu-*` — редактор сборки, прокрученный к «Запуску» и к «Меню игры», `quick-join-pack-*` — диалог «Сборка под сервер» для «Сервера Димы» (смоук поднимает его на 127.0.0.1:25599, `SmokeServer.kt`), `quick-join-packed-light` — после нажатия «Создать сборку» (сборка ставится в `.local/smoke-data`), `friend-pack-*` — «Зайти к другу» на Lumi-сервер без своей сборки (только с `YUMI_SMOKE_FRIENDS`, когда друг на сервере и подходящей сборки ещё нет: с ней окно сразу запустило бы игру), `settings-scene-*` — группа острова с «Во время игры», `settings-game-*` — группа «Игра» в настройках, `settings-key-*` — поле ключа CurseForge с отказом CurseForge на ключ-GUID (снимаются вместе с предыдущим кадром: `--only=settings-,pack-editor-`). `--only=server,scene-` снимает только кадры, в имени которых есть одна из подстрок. Настройки и данные — отдельные, пользовательские не трогает. **Обязателен после изменений UI**, снимки нужно посмотреть. |
 | `--launch-test <версия> <папка> [загрузчик] [проекты Modrinth…] [--join=host:port] [--injector] [--menu=pink-dark-font]` | Без окна скачивает версию (и загрузчик, и моды), запускает игру, ждёт отрисовки и закрывает. `--join` — сразу зайти на сервер, `--injector` — под authlib-injector, как с аккаунтом Ely.by, `--menu` — поставить пак «меню игры» так же, как кнопка «Играть» (палитра, `light`/`dark`, `font`), и проверить, что игра его загрузила. |
 | `--server-test <версия> <папка> [загрузчик] [порт] [--share=<папка с модами>] [--install=<папка>]` | Ставит сервер как экран «Серверы», запускает, пингует, выполняет `list`, выключает по `stop`. `--share` раздаёт эти моды как сборку сервера (метка в MOTD, как «Раздавать сборку»); после пинга печатает моды из пинга и план «Сборки под сервер», `--install` скачивает её моды. Для Forge положите моды в `servers/test-<версия>-forge/mods`. |
 | `--ping-test <адрес…>` | Пинг серверов, как в «Быстром входе». |
@@ -128,10 +128,10 @@ app/src/main/kotlin/com/yumi/launcher/
 │   ├── ServerPing.kt    пинг серверов (SLP 1.7+, старый 0xFE, SRV), MOTD в цветах
 │   ├── FriendsApi.kt    клиент сервера друзей (friends-server/): профиль, заявки, статус
 │   ├── PackShare.kt     сборка сервера в MOTD: SharedPack, метка `yumi1:`, описание модов по SHA-1/отпечатку CurseForge
-│   ├── ServerPacks.kt   что пинг говорит о модах (метка Yumi, список Forge, флаг NeoForge) → план «Сборки под сервер»
+│   ├── ServerPacks.kt   что пинг говорит о модах (метка `yumi1:`, список Forge, флаг NeoForge) → план «Сборки под сервер»
 │   ├── CatalogFilters.kt  виды проектов (моды, шейдеры, ресурспаки, сборки), сортировки, категории каталогов
 │   ├── Support.kt       Telegram разработчика, архив логов с вырезанными секретами, файл в буфер обмена
-│   ├── LauncherLog.kt   свой лог лаунчера в %APPDATA%\YumiLauncher\logs
+│   ├── LauncherLog.kt   свой лог лаунчера в %APPDATA%\LumiLauncher\logs
 │   ├── SavedWorlds.kt   миры сборки: список, описание из level.dat (имя, папка, дата, режим, версия), копия на сервер
 │   ├── Nbt.kt           чтение NBT — ровно столько, сколько нужно для level.dat
 │   ├── LauncherPaths.kt где что лежит
@@ -149,10 +149,10 @@ app/src/main/kotlin/com/yumi/launcher/
 │   ├── QuickJoin.kt     список «Быстрого входа» и пинги
 │   ├── ElyAccount.kt    сессия Ely.by: вход, 2FA, обновление токена
 │   ├── MicrosoftAccount.kt  сессия Microsoft: ожидание кода, обновление токена игры перед запуском
-│   ├── MenuStyles.kt    пак «меню игры» в сборке: Yumi.zip в resourcepacks, строка в options.txt, кэш
+│   ├── MenuStyles.kt    пак «меню игры» в сборке: Lumi.zip в resourcepacks (старый Yumi.zip заменяет на месте), строка в options.txt, кэш
 │   ├── GameOptions.kt   общие настройки игры: options.txt сборок ↔ общая копия, только изменения
 │   ├── Friends.kt       друзья: статус раз в 30 с и при смене игры/сервера, заявки, адрес своего сервера для друзей
-│   ├── FriendServers.kt серверы, на которых друзья: пинг и проверка, есть ли своя сборка под Yumi-сервер
+│   ├── FriendServers.kt серверы, на которых друзья: пинг и проверка, есть ли своя сборка под Lumi-сервер
 │   └── GameLog.kt       разбор XML-лога log4j из игры
 ├── settings/LauncherSettings.kt   настройки в java.util.prefs, каждое поле — Compose state
 ├── scene/               воксельный остров на фоне
@@ -184,7 +184,7 @@ app/src/main/kotlin/com/yumi/launcher/
 
 - **Настройки** — `java.util.prefs`, узел `com/yumi/launcher` (на Windows это реестр). Смоук-режим
   пишет в `com/yumi/launcher-smoke` и удаляет его в конце.
-- **`LauncherPaths.config`** = `%APPDATA%\YumiLauncher`: кэш (список версий, иконки, установщики,
+- **`LauncherPaths.config`** = `%APPDATA%\LumiLauncher` (у игроков с версий до 1.1 — `%APPDATA%\YumiLauncher`, если она есть): кэш (список версий, иконки, установщики,
   паки «меню игры»), `servers.json` — список «Быстрого входа», `game-options/` — общие настройки
   игры (`modern.txt`, `legacy.txt` для версий до 1.13) и `pending/<сборка>.txt` — снимок
   `options.txt` на момент запуска, пока изменения из него не ушли в общие.
@@ -207,7 +207,7 @@ app/src/main/kotlin/com/yumi/launcher/
   сессия Microsoft) и вид, которым играют, — с ними работают запуск, вход и обновление токенов.
   Остальные ждут в дочернем узле `savedAccounts`, по записи на аккаунт (у значения в prefs предел
   8 КБ); переключение меняет ждущий местами с тем, что в слоте. Токены ждущих не обновляются.
-- **Лог лаунчера** — `%APPDATA%\YumiLauncher\logs\launcher.log` (прошлый запуск — `launcher.1.log`),
+- **Лог лаунчера** — `%APPDATA%\LumiLauncher\logs\launcher.log` (прошлый запуск — `launcher.1.log`),
   архивы «Отправить лог» — `support/`, хранятся пять последних.
 
 ## Соглашения
@@ -253,6 +253,14 @@ app/src/main/kotlin/com/yumi/launcher/
 
 ## Известные грабли
 
+- **Имя.** С 1.1 лаунчер называется Lumi Launcher. Старое «Yumi» оставлено там, где его видят
+  только программы, и менять его нельзя: метка сборки `yumi1:` в описании сервера (по ней её
+  узнают друзья со старой версией), пакет `com.yumi.launcher` и узел настроек `com/yumi/launcher`,
+  `yumi-server.json`, `%APPDATA%\YumiLauncher` у старых игроков (туда по умолчанию скачивалась игра,
+  и путь к ней записан в настройках), `AppId` и `upgradeUuid` установщика.
+- **Иконка** рисуется скриптом `scripts/make-icon.py` (нужен Pillow) — каждый размер отдельно, чтобы
+  пиксельный фонарь не мылился; правь там и запускай заново. Тот же фонарь в шапке окна и в значке
+  пака меню — `LANTERN` в `ui/components/LumiMark.kt`; держи их одинаковыми.
 - **Кодировка.** Русская Windows пишет вывод Java в cp1251. Процессам игры и сервера всегда
   передаются `-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8`, вывод
   читается как UTF-8.
@@ -300,7 +308,7 @@ app/src/main/kotlin/com/yumi/launcher/
   1.20.1 и varint позже, пробуются обе. Forge пишет «только сервер» без версии (или `OHNOES…`) —
   такие пропускаются. NeoForge отдаёт только `isModded`, Fabric и ванилла — ничего. ID мода ≠
   слаг Modrinth (`farmersdelight` → `farmers-delight`), поэтому слаги угадываются разбиением ID
-  и проверяются одним запросом `/projects?ids=[…]` (он принимает слаги). Своя сборка сервера Yumi
+  и проверяются одним запросом `/projects?ids=[…]` (он принимает слаги). Своя сборка сервера Lumi
   едет в MOTD после `
 
 §8yumi1:` — клиент игры рисует две строки описания, остальное не видно;
@@ -325,7 +333,7 @@ app/src/main/kotlin/com/yumi/launcher/
   (`java -cp`, из папки `app/`): через `gradlew run` она может не дойти до уже запущенного демона. Друг на `127.0.0.1:25599` — это
   «Сервер Димы» из смоука: на нём видна проверка сборки (`friend-pack-*`).
 - **Сборка у друга на сервере.** `FriendServers` пингует серверы, на которых друзья (по адресу, раз
-  при появлении и при каждом возврате на главную). Если сервер раздаёт сборку Yumi, план
+  при появлении и при каждом возврате на главную). Если сервер раздаёт сборку Lumi, план
   «Сборки под сервер» сверяется со сборками игрока: та же версия и загрузчик, и каждый мод плана
   лежит включённым в `mods` — по SHA-1 (кэш по размеру и времени файла), без хэша — по имени.
   Лишние моды не мешают. Под другом ничего не показывается: подошедшую сборку просто берёт «Зайти
@@ -414,7 +422,7 @@ app/src/main/kotlin/com/yumi/launcher/
 - Он часто набирает текст в английской раскладке. Восстанавливай раскладку сам и не переспрашивай:
   `pfgei` → «запуш», `pfgecnb ltvj` → «запусти демо», `gjlcjtlbyb ubn` → «подсоедини гит».
 - «Запусти демо» = `./gradlew --offline :app:run` в фоне (с `source` и `GRADLE_USER_HOME` выше).
-  У владельца есть и ярлык «Yumi Launcher (демо)» на рабочем столе: `scripts/run-demo.vbs` →
+  У владельца есть и ярлык «Lumi Launcher (демо)» на рабочем столе: `scripts/run-demo.vbs` →
   `scripts/run-demo.cmd` (без консоли, лог в `.local/demo.log`); пересоздать —
   `scripts/make-shortcut.ps1`. В среде агента задана `NoDefaultCurrentDirectoryInExePath=1`:
   в `.cmd` вызывай программы по полному пути, текущая папка не просматривается.

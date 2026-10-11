@@ -8,10 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.res.loadSvgPainter
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.res.useResource
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.input.key.Key
@@ -58,6 +57,7 @@ import java.awt.Robot
 import java.awt.Toolkit
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
+import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -157,7 +157,7 @@ private fun launcher(args: Array<String>) = application {
                 // The guide is photographed on purpose below, not over every other shot.
                 it.guideDone = true
                 // A nick in the slot and two accounts waiting in the switcher.
-                it.nick = "YumiPlayer"
+                it.nick = "LumiPlayer"
                 it.savedAccounts = listOf(
                     SavedAccount(AccountKind.Offline, "Builder_Alex"),
                     SavedAccount(AccountKind.ElyBy, "Dima", uuid = "00000000000000000000000000000002"),
@@ -175,9 +175,9 @@ private fun launcher(args: Array<String>) = application {
                     resolve("yumi-server.json").writeText(
                         """{"id":"smoke-server","name":"Сервер для друзей","packId":"smoke-fabric","version":"1.21.1","loader":"Fabric","memoryMb":4096}""",
                     )
-                    resolve("server.properties").writeText("server-port=25565\nmotd=§bYumi §7— §aвыживание с друзьями\nmax-players=10\nwhite-list=true\nenforce-whitelist=true\n")
+                    resolve("server.properties").writeText("server-port=25565\nmotd=§bLumi §7— §aвыживание с друзьями\nmax-players=10\nwhite-list=true\nenforce-whitelist=true\n")
                     resolve("whitelist.json").writeText(
-                        """[{"uuid":"4a2f0bb1-4c7e-3a05-8a7f-2a4d1b0e7c11","name":"YumiPlayer"},{"uuid":"5b3e1cc2-5d8f-3b16-9b80-3b5e2c1f8d22","name":"Builder_Alex"}]""",
+                        """[{"uuid":"4a2f0bb1-4c7e-3a05-8a7f-2a4d1b0e7c11","name":"LumiPlayer"},{"uuid":"5b3e1cc2-5d8f-3b16-9b80-3b5e2c1f8d22","name":"Builder_Alex"}]""",
                     )
                     resolve("banned-players.json").writeText(
                         """[{"uuid":"00000000-0000-0000-0000-000000000001","name":"Griefer228","created":"2026-09-20 18:04:11 +0500","source":"Server","expires":"forever","reason":"Сломал спавн"},""" +
@@ -194,7 +194,8 @@ private fun launcher(args: Array<String>) = application {
         }
     }
     val windowState = rememberWindowState(width = 1280.dp, height = 800.dp, position = WindowPosition(Alignment.Center))
-    val icon = remember(::launcherIcon)
+    val icons = remember(::launcherIcons)
+    val icon = remember { BitmapPainter(icons.last().toComposeImageBitmap()) }
     var smokeState by remember { mutableStateOf<LauncherState?>(null) }
     var smokeModel by remember { mutableStateOf<LauncherModel?>(null) }
     // Alt+F4 and the taskbar's "close" go through the launcher, which may have servers to stop first.
@@ -217,13 +218,15 @@ private fun launcher(args: Array<String>) = application {
     Window(
         onCloseRequest = { closeRequests++ },
         state = windowState,
-        title = "Yumi",
+        title = "Lumi",
         icon = icon,
         undecorated = true,
         onPreviewKeyEvent = fullscreenKey,
     ) {
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(1100, 720)
+            // Every size, so Windows picks the one drawn for the taskbar's size instead of scaling one.
+            window.iconImages = icons
             if (smoke) {
                 window.isAlwaysOnTop = true
                 window.toFront()
@@ -291,7 +294,7 @@ private fun launcher(args: Array<String>) = application {
                     shot("folded-$suffix", 1200) { settings.friendsHidden = true }
                     settings.newsHidden = false
                     settings.friendsHidden = false
-                    // With friends from a friends server (YUMI_SMOKE_FRIENDS): "Зайти к другу" to a Yumi server without its pack.
+                    // With friends from a friends server (YUMI_SMOKE_FRIENDS): "Зайти к другу" to a Lumi server without its pack.
                     // Only while there is none here — with one, the dialog would go straight into the game.
                     val friends = smokeModel?.friends
                     friends?.view?.friends?.firstOrNull { it.online && it.server != null && friends.servers.checks[it.server] is PackCheck.Missing }?.let { friend ->
@@ -506,6 +509,11 @@ private val SMOKE_LOG = listOf(
     "[12:05:30] [Server thread/INFO]: There are 2 of a max of 10 players online: Steve, Alex",
 )
 
-/** Same loader as YumiDesktop: the classpath SVG API is deprecated but one file does not justify the resources plugin. */
+/**
+ * The icon at each size `scripts/make-icon.py` draws, smallest first. Compose gives the window one
+ * image scaled to 32 px; the lantern is pixel art, and scaled it would blur.
+ */
 @Suppress("DEPRECATION")
-private fun launcherIcon(): Painter = useResource("icon/yumi.svg") { loadSvgPainter(it, Density(1f)) }
+private fun launcherIcons(): List<BufferedImage> = listOf(16, 20, 24, 32, 40, 48, 64, 128, 256).map { size ->
+    useResource("icon/lumi-$size.png", ImageIO::read)
+}

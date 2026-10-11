@@ -136,7 +136,7 @@ internal object ServerPing {
         val players = status.obj("players")
         val favicon = status.str("favicon")?.substringAfter("base64,", "")?.takeIf { it.isNotEmpty() }
         val description = status["description"]
-        // A pack shared by Yumi Launcher rides in the description's hidden lines; nobody should see it.
+        // A pack shared by Lumi Launcher rides in the description's hidden lines; nobody should see it.
         val shared = description?.let(PackShare::find)
         return PingResult(
             motd = description?.let { motd(PackShare.scrub(it)) }.orEmpty(),

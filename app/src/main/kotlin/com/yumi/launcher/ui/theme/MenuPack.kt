@@ -5,16 +5,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import com.yumi.launcher.settings.Palette
-import com.yumi.launcher.ui.components.STAIRCASE
+import com.yumi.launcher.ui.components.LANTERN
+import com.yumi.launcher.ui.components.lanternColor
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.PaintMode
 import org.jetbrains.skia.PaintStrokeCap
 import org.jetbrains.skia.PaintStrokeJoin
-import org.jetbrains.skia.Path
 import org.jetbrains.skia.PathBuilder
 import org.jetbrains.skia.RRect
+import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
@@ -41,14 +42,17 @@ object MenuPack {
     /** The oldest pack format the sprites work in: 1.20.2, when the GUI moved to sprites. */
     const val MIN_FORMAT = 18
 
+    /** What the pack's zip says about itself, so the launcher knows its own file in a game folder. */
+    const val COMMENT = "Lumi Launcher"
+
     /** The newest resource pack format this launcher knows: 26.3. */
     const val KNOWN_FORMAT = 97
 
     /** What the pack is called in the game's list: the palette and the theme. */
-    fun title(palette: Palette, dark: Boolean) = "Yumi — ${palette.label}, ${if (dark) "тёмная" else "светлая"}"
+    fun title(palette: Palette, dark: Boolean) = "Lumi — ${palette.label}, ${if (dark) "тёмная" else "светлая"}"
 
     /** The name of the font-only add-on in the game's list. */
-    const val FONT_TITLE = "Yumi — шрифт лаунчера"
+    const val FONT_TITLE = "Lumi — шрифт лаунчера"
 
     /**
      * The pack as a zip. With [font] it also brings the launcher's typeface; [maxFormat] is the newest
@@ -90,7 +94,7 @@ object MenuPack {
         return """
             {
               "pack": {
-                "description": {"text": "Yumi", "color": "$accent", "extra": [{"text": " · $subtitle", "color": "#C9CFD9"}]},
+                "description": {"text": "Lumi", "color": "$accent", "extra": [{"text": " · $subtitle", "color": "#C9CFD9"}]},
                 "pack_format": $MIN_FORMAT,
                 "supported_formats": [$MIN_FORMAT, $max],
                 "min_format": $MIN_FORMAT,
@@ -121,22 +125,22 @@ object MenuPack {
         return mapOf("assets/yumi/font/ui.ttf" to ttf, "assets/minecraft/font/default.json" to json.toByteArray())
     }
 
-    /** The launcher's badge: the Yumi mark on a round plate. */
+    /** The launcher's badge: the Lumi lantern on a round plate, six texels a lantern pixel. */
     private fun icon(plate: Color, mark: Color): ByteArray = paint(128, 128, 1) {
         drawCircle(64f, 64f, 64f, fill(plate))
-        save()
-        scale(128f / 366f, 128f / 366f)
-        val glyph = fill(mark)
-        drawRRect(RRect.makeLTRB(81f, 65f, 160f, 144f, 11f), glyph)
-        drawRRect(RRect.makeLTRB(208.219f, 65.3521f, 287.219f, 144.3521f, 11f), glyph)
-        drawPath(Path.makeFromSVGString(STAIRCASE), glyph)
-        restore()
+        val unit = 6f
+        val start = (128f - LANTERN.size * unit) / 2
+        LANTERN.forEachIndexed { y, row ->
+            row.forEachIndexed { x, cell ->
+                lanternColor(cell, mark)?.let { drawRect(Rect.makeXYWH(start + x * unit, start + y * unit, unit, unit), fill(it)) }
+            }
+        }
     }
 
     private fun zip(files: Map<String, ByteArray>): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
-            zip.setComment("Yumi Launcher")
+            zip.setComment(COMMENT)
             for ((path, bytes) in files) {
                 // A fixed date: the same pack builds into the same bytes, so an unchanged one is never rewritten.
                 zip.putNextEntry(ZipEntry(path).apply { time = STAMP })

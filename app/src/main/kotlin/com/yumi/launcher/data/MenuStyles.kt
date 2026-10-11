@@ -29,11 +29,16 @@ data class MenuStyle(val palette: Palette = Palette.Original, val dark: Boolean 
  * and its line in `options.txt` go.
  */
 internal object MenuStyles {
-    private const val FILE = "Yumi.zip"
+    private const val FILE = "Lumi.zip"
     private const val ID = "file/$FILE"
 
+    /** The file before the launcher was renamed Lumi: replaced by [FILE] where it stood in the player's list. */
+    private const val OLD_FILE = "Yumi.zip"
+    private const val OLD_ID = "file/$OLD_FILE"
+    private const val OLD_COMMENT = "Yumi Launcher"
+
     /** Bumped whenever what [MenuPack] draws changes, so the cached packs are built again. */
-    private const val GENERATION = 1
+    private const val GENERATION = 2
 
     /** Whether the version's menus are made of the sprites the pack paints: 1.20.2 and its snapshots on. */
     fun supports(entry: VersionEntry?): Boolean = entry == null || entry.releaseTime >= FIRST_SPRITES
@@ -44,6 +49,9 @@ internal object MenuStyles {
     /** Puts the pack for [style] into [gameDir], or takes it out when [style] is null or [clientJar]'s game predates it. */
     fun apply(gameDir: File, style: MenuStyle?, clientJar: File) {
         val file = gameDir.resolve("resourcepacks").resolve(FILE)
+        val old = gameDir.resolve("resourcepacks").resolve(OLD_FILE)
+        if (old.isFile && ours(old)) old.delete()
+        editResourcePacks(gameDir) { packs -> packs.map { if (it == OLD_ID) ID else it }.distinct() }
         val format = resourceFormat(clientJar)
         if (style == null || format == null || format < MenuPack.MIN_FORMAT) {
             if (file.isFile && ours(file)) file.delete()
@@ -72,7 +80,7 @@ internal object MenuStyles {
         }
     }
 
-    private fun ours(file: File) = runCatching { ZipFile(file).use { it.comment == "Yumi Launcher" } }.getOrDefault(false)
+    private fun ours(file: File) = runCatching { ZipFile(file).use { it.comment == MenuPack.COMMENT || it.comment == OLD_COMMENT } }.getOrDefault(false)
 
     /**
      * The resource pack format of the game in [clientJar], from the `version.json` inside it: a

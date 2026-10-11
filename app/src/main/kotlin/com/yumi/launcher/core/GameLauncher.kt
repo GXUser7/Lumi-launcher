@@ -40,7 +40,7 @@ internal class LaunchOptions(
 )
 
 internal object GameLauncher {
-    private const val BRAND = "Yumi"
+    private const val BRAND = "Lumi"
     private const val VERSION = "0.1.0"
 
     /**

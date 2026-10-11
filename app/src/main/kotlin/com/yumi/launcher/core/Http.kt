@@ -168,7 +168,7 @@ internal object Http {
     private fun request(url: String) = HttpRequest.newBuilder(URI.create(url))
         .timeout(Duration.ofSeconds(60))
         // Modrinth asks every client to identify itself.
-        .header("User-Agent", "YumiLauncher/0.1.0 (yumi-launcher)")
+        .header("User-Agent", "LumiLauncher/${Support.VERSION} (lumi-launcher)")
 
     private inline fun <T> retry(message: String, block: () -> T): T {
         var failure: Exception? = null

@@ -82,7 +82,7 @@ fun FolderPrompt(onUse: (File) -> Unit, onCancel: () -> Unit) {
                     Icon(Icons.Rounded.Warning, null, Modifier.size(18.dp), tint = scheme.error)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "В пути есть не латинские буквы — версии старше 1.13 могут не запуститься. Лучше папка вроде C:\\Games\\Yumi.",
+                        "В пути есть не латинские буквы — версии старше 1.13 могут не запуститься. Лучше папка вроде C:\\Games\\Lumi.",
                         style = MaterialTheme.typography.bodySmall,
                         color = scheme.error,
                     )

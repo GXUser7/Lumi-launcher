@@ -88,7 +88,7 @@ import com.yumi.launcher.ui.components.ModalCard
 import com.yumi.launcher.ui.components.SkinHead
 import com.yumi.launcher.ui.components.ResizeEdges
 import com.yumi.launcher.ui.components.WindowControls
-import com.yumi.launcher.ui.components.YumiMark
+import com.yumi.launcher.ui.components.LumiMark
 import com.yumi.launcher.ui.components.connectedShapes
 import com.yumi.launcher.ui.console.ConsoleScreen
 import com.yumi.launcher.ui.mods.ModsScreen
@@ -251,7 +251,7 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(Modifier.size(56.dp).glass(CircleShape), contentAlignment = Alignment.Center) {
-            YumiMark(plate = scheme.primary, glyph = scheme.onPrimary, size = 44.dp)
+            LumiMark(plate = scheme.primary, glyph = scheme.onPrimary, size = 44.dp)
         }
         Row(
             Modifier.glass(CircleShape).padding(6.dp),

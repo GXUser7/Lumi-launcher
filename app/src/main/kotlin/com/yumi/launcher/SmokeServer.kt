@@ -13,7 +13,7 @@ import kotlin.concurrent.thread
 
 /**
  * For the smoke run: a friend's server that answers only the server list ping, on loopback — a
- * pack shared in its description, as a server run from Yumi Launcher shares it, so the quick-join
+ * pack shared in its description, as a server run from Lumi Launcher shares it, so the quick-join
  * screen and its "Сборка под сервер" have something real to show. The mods are real Modrinth
  * versions; making the pack looks them up.
  */

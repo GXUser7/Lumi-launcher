@@ -72,7 +72,7 @@ fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Добро пожаловать в Yumi", style = type.titleSmall, color = scheme.onSurfaceVariant)
+        Text("Добро пожаловать в Lumi", style = type.titleSmall, color = scheme.onSurfaceVariant)
         Text(
             buildAnnotatedString {
                 append("Привет,\n")

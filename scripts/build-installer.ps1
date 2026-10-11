@@ -1,5 +1,5 @@
-# Builds Yumi Launcher's installer: the application image with its own Java (Compose's
-# createDistributable), then Inno Setup around it. The result is dist\Yumi-Launcher-<version>-windows-x64-setup.exe.
+# Builds Lumi Launcher's installer: the application image with its own Java (Compose's
+# createDistributable), then Inno Setup around it. The result is dist\Lumi-Launcher-<version>-windows-x64-setup.exe.
 #
 #   ./scripts/build-installer.ps1              # uses JAVA_HOME, or the shared toolchain next to the project
 #   ./scripts/build-installer.ps1 -Offline     # Gradle from its cache only
@@ -33,7 +33,7 @@ try {
         if (-not $InnoCompiler) { throw 'Inno Setup 6 not found: install it or pass -InnoCompiler <path to ISCC.exe>.' }
     }
     New-Item -ItemType Directory -Force -Path dist | Out-Null
-    & $InnoCompiler /Q installer\YumiLauncher.iss
+    & $InnoCompiler /Q installer\LumiLauncher.iss
     if ($LASTEXITCODE -ne 0) { throw 'Compiling the installer failed.' }
     Get-ChildItem dist\*setup.exe | ForEach-Object {
         '{0}  {1:N1} MB' -f $_.Name, ($_.Length / 1MB)

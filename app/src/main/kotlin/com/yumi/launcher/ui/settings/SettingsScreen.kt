@@ -89,7 +89,7 @@ fun SettingsScreen(model: LauncherModel, onGuide: () -> Unit = {}) {
         PalettePicker(settings.palette) { settings.palette = it }
         Hint(
             when (settings.palette) {
-                Palette.Original -> "Ледяная Glacier — фирменные цвета Yumi."
+                Palette.Original -> "Ледяная Glacier — исходные цвета лаунчера."
                 Palette.Green -> "Пастельная мята с фисташковым и абрикосовым."
                 Palette.Pink -> "Пастельная сакура с сиреневым и мятным."
                 Palette.Blue -> "Пастельное небо с лавандовым и сливочным."
@@ -234,7 +234,7 @@ fun SettingsScreen(model: LauncherModel, onGuide: () -> Unit = {}) {
         }
 
         Spacer(Modifier.height(4.dp))
-        Text("Yumi Launcher ${Support.VERSION}", style = type.labelMedium, color = scheme.outline)
+        Text("Lumi Launcher ${Support.VERSION}", style = type.labelMedium, color = scheme.outline)
     }
 }
 

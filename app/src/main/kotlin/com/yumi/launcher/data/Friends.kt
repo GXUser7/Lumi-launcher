@@ -42,7 +42,7 @@ class FriendsModel(private val model: LauncherModel, private val scope: Coroutin
 
     private val nudge = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    /** The servers friends are on, and whether a pack here fits the one a Yumi server shares. */
+    /** The servers friends are on, and whether a pack here fits the one a Lumi server shares. */
     internal val servers = FriendServers(model, scope)
 
     /** No server is built in: players run their own (`friends-server/`) and share its address. */

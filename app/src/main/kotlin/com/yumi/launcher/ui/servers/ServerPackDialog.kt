@@ -46,7 +46,7 @@ import kotlin.math.absoluteValue
 
 /**
  * A pack for a server, from what its ping gave away: the host's own pack when the server runs in
- * Yumi Launcher, mods found by their ids for Forge, only the game version and loader otherwise.
+ * Lumi Launcher, mods found by their ids for Forge, only the game version and loader otherwise.
  * The server is one in the quick-join list — the new pack becomes the one it is joined with — or
  * the one a friend is on, when "Зайти к другу" found no pack here like the host's: then the pack
  * is downloaded and the game goes straight in, or goes in as things are ([onJoin]).
@@ -244,7 +244,7 @@ private fun PackForServer(
 
 private fun explanation(plan: ServerPlan, curseForge: Boolean): String = when (plan.kind) {
     ServerPlan.Kind.Yumi ->
-        "Сервер запущен в Yumi Launcher и раздаёт свою сборку: версия, загрузчик и моды будут те же, что у хозяина."
+        "Сервер запущен в Lumi Launcher и раздаёт свою сборку: версия, загрузчик и моды будут те же, что у хозяина."
     ServerPlan.Kind.Forge ->
         "Forge-сервер назвал свои моды — нашлось ${plan.mods.size} из ${plan.total} на Modrinth" + (if (curseForge) " и CurseForge." else ".")
     ServerPlan.Kind.Modded ->

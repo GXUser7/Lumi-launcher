@@ -21,7 +21,7 @@ import java.util.zip.ZipOutputStream
  * they see exactly what leaves their computer, and no bot token has to live in the launcher.
  */
 object Support {
-    const val VERSION = "0.1.0"
+    const val VERSION = "1.1"
     const val TELEGRAM = "BBnov22"
     const val CHAT_URL = "https://t.me/$TELEGRAM"
 

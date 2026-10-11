@@ -18,7 +18,7 @@ data class ForgeMod(val id: String, val version: String?)
 
 /** What a server's ping gives away about the mods it wants. */
 sealed interface ModHints {
-    /** Run from Yumi Launcher: the exact pack. */
+    /** Run from Lumi Launcher: the exact pack. */
     data class Yumi(val pack: SharedPack) : ModHints
 
     /** Forge lists its mods by id and version — no downloads; [truncated] when it cut the list short. */
@@ -58,7 +58,7 @@ internal data class ServerPlan(
 }
 
 /**
- * Reads what a server's ping says about its mods, and turns it into a pack. A server from Yumi
+ * Reads what a server's ping says about its mods, and turns it into a pack. A server from Lumi
  * Launcher names its exact pack ([PackShare]); Forge lists mod ids and versions, which are looked up
  * on Modrinth, then on CurseForge; NeoForge, Fabric and plain servers say nothing about mods, so
  * only the game version and the loader can be matched.

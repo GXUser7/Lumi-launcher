@@ -20,7 +20,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-/** Whether a pack here is the one a friend's Yumi server shares. */
+/** Whether a pack here is the one a friend's Lumi server shares. */
 internal sealed interface PackCheck {
     data object Checking : PackCheck
 
@@ -36,7 +36,7 @@ internal sealed interface PackCheck {
 
 /**
  * The servers friends are on, for the friends card: each pinged as it turns up, and for one run
- * from Yumi Launcher — its ping names its pack — whether a pack here already has that pack's game,
+ * from Lumi Launcher — its ping names its pack — whether a pack here already has that pack's game,
  * loader and mods, the way "Сборка сервера" would make it. By address, so two friends on one
  * server make one ping.
  */

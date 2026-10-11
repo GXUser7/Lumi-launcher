@@ -25,7 +25,7 @@ object LauncherLog {
             val out = FileOutputStream(log, true)
             System.setOut(PrintStream(Tee(System.out, out), true, Charsets.UTF_8))
             System.setErr(PrintStream(Tee(System.err, out), true, Charsets.UTF_8))
-            println("Yumi Launcher ${Support.VERSION} · ${System.getProperty("os.name")} ${System.getProperty("os.version")} · Java ${System.getProperty("java.version")}")
+            println("Lumi Launcher ${Support.VERSION} · ${System.getProperty("os.name")} ${System.getProperty("os.version")} · Java ${System.getProperty("java.version")}")
         }
     }
 

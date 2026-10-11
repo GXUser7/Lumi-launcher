@@ -324,7 +324,7 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
                 created = true
                 if (world != null) SavedWorlds.copy(gameDir, world, dir.resolve("world"))
                 // Asked in the form that created it; the server refuses to start without this line.
-                dir.resolve("eula.txt").writeText("# https://aka.ms/MinecraftEULA — accepted in Yumi Launcher\neula=true\n")
+                dir.resolve("eula.txt").writeText("# https://aka.ms/MinecraftEULA — accepted in Lumi Launcher\neula=true\n")
                 ServerProperties(dir.resolve("server.properties")).apply {
                     val numeric = numericProperties(profile.version)
                     this["server-port"] = port.toString()
@@ -437,7 +437,7 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
                     add("nogui")
                 }
                 session.status = ServerStatus.Starting
-                session.append(listOf("[Yumi] ${profile.loader.label} ${profile.version}${profile.loaderVersion?.let { " ($it)" }.orEmpty()}, память ${profile.memoryMb} МБ"))
+                session.append(listOf("[Lumi] ${profile.loader.label} ${profile.version}${profile.loaderVersion?.let { " ($it)" }.orEmpty()}, память ${profile.memoryMb} МБ"))
                 val process = withContext(Dispatchers.IO) {
                     ProcessBuilder(command).directory(folder(profile)).redirectErrorStream(true).start()
                 }
@@ -479,19 +479,19 @@ class ServerManager(private val model: LauncherModel, private val scope: Corouti
             val described = PackShare.describe(jars, profile.version, profile.loader, profile.loaderVersion ?: pack.loaderVersion, model.settings.curseForgeKey)
             val tag = PackShare.tag(described)
             if (tag.length > PackShare.MAX_TAG) {
-                session.append(listOf("[Yumi] Сборка слишком большая, чтобы раздавать её игрокам через описание сервера"))
+                session.append(listOf("[Lumi] Сборка слишком большая, чтобы раздавать её игрокам через описание сервера"))
                 return null
             }
             val found = jars.size - described.missing.size
             session.append(
                 listOf(
-                    "[Yumi] Игроки с Yumi Launcher соберут такую же сборку в «Быстром входе»: $found из ${jars.size} модов" +
+                    "[Lumi] Игроки с Lumi Launcher соберут такую же сборку в «Быстром входе»: $found из ${jars.size} модов" +
                         if (described.missing.isEmpty()) "" else ". Нет на Modrinth и CurseForge — передайте друзьям сами: ${described.missing.joinToString(", ")}",
                 ),
             )
             tag
         } catch (e: Exception) {
-            session.append(listOf("[Yumi] Не удалось описать сборку для игроков: ${e.message}"))
+            session.append(listOf("[Lumi] Не удалось описать сборку для игроков: ${e.message}"))
             null
         }
     }

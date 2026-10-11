@@ -328,7 +328,7 @@ private fun FriendRow(model: LauncherModel, friend: Friend, onJoin: (Instance?, 
 }
 
 /**
- * "Зайти к другу": straight in, unless the friend is on a server run from Yumi Launcher whose pack
+ * "Зайти к другу": straight in, unless the friend is on a server run from Lumi Launcher whose pack
  * no pack here has — or that is still being checked. Then the choice comes first: download the
  * host's pack as a pack of its own, or go in as things are.
  */
@@ -363,7 +363,7 @@ private fun ago(seen: Long): String {
 }
 
 /**
- * The pack to join a friend with: the one that has their Yumi server's pack, then one like theirs —
+ * The pack to join a friend with: the one that has their Lumi server's pack, then one like theirs —
  * same name and version, or the same game — or the chosen one.
  */
 private fun packFor(model: LauncherModel, friend: Friend): Instance? {
