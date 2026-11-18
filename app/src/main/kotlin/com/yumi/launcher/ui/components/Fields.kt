@@ -39,6 +39,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.ui.theme.LocalInGlass
+import com.yumi.launcher.ui.theme.glassFieldContainer
 
 /*
  * The launcher's text field: filled and rounded with no underline — the look the nick field on
@@ -174,12 +176,14 @@ private fun Modifier.fieldOutline(interaction: MutableInteractionSource, shape: 
     val scheme = MaterialTheme.colorScheme
     val focused by interaction.collectIsFocusedAsState()
     val hovered by interaction.collectIsHoveredAsState()
+    val inGlass = LocalInGlass.current
     val color by animateColorAsState(
         when {
             !enabled -> Color.Transparent
             isError -> scheme.error
             focused -> scheme.primary
             hovered -> scheme.outline
+            inGlass -> scheme.outlineVariant.copy(alpha = 0.36f)
             else -> Color.Transparent
         },
     )
@@ -191,7 +195,7 @@ private fun Modifier.fieldOutline(interaction: MutableInteractionSource, shape: 
 private fun fieldColors(interaction: MutableInteractionSource): TextFieldColors {
     val scheme = MaterialTheme.colorScheme
     val hovered by interaction.collectIsHoveredAsState()
-    val rest = LocalFieldContainer.current ?: scheme.surfaceContainerHigh
+    val rest = LocalFieldContainer.current ?: glassFieldContainer()
     // State layers over the fill: the accent while typing, a trace of the text colour under the pointer.
     val focused = scheme.primary.copy(alpha = 0.08f).compositeOver(rest)
     val hover = scheme.onSurface.copy(alpha = 0.05f).compositeOver(rest)

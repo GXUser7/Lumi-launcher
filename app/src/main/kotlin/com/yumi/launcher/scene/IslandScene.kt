@@ -143,8 +143,11 @@ internal fun islandScene(): Scene {
     b.library(-13, -12)
     b.portal(8, -8)
     b.campfire(1, 9)
+    b.lanternSpire(1, -16)
     b.grow()
     b.paths()
+    b.bridge()
+    b.skyDock(11, 10)
     b.trees()
     b.farm(-3, -13)
     b.plants()
@@ -174,7 +177,7 @@ internal fun islandScene(): Scene {
         drift = drift,
         far = far,
         spots = mapOf(
-            SceneSpot.Overview to CameraPose(floatArrayOf(0f, -3f, 0f), distance = 64f, yaw = 0.6f, pitch = 0.2f, fov = 46f, orbit = true, pull = 0f, rise = 6f),
+            SceneSpot.Overview to CameraPose(floatArrayOf(0f, -1.8f, 0f), distance = 58f, yaw = 0.6f, pitch = 0.21f, fov = 46f, orbit = true, pull = 0f, rise = 6f),
             // In the smithy's open corner, looking across the room: the hearth and its lava at the
             // back, the anvil in the middle, the furnaces on the right, the lantern hanging over it
             // all. It comes in under the beam, past the corner post.
@@ -279,18 +282,26 @@ private class Builder(val w: World, val rng: Rng) {
         return (1.4f + fbm(x * 0.16f + 2, z * 0.16f + 5, 3) * 2.4f + mound).roundToInt()
     }
 
-    /** How far the rock hangs under a column: deepest in the middle, tapering to the rim at [edge]. */
-    fun depth(x: Int, z: Int, d: Float, edge: Float): Int =
-        ((1 - d / edge).coerceAtLeast(0f).pow(0.75f) * 17 + valueNoise(x * 0.35f, z * 0.35f, 4) * 3).roundToInt() + 2
+    /** How far the rock hangs under a column: main central crag plus secondary stalactites under key landmarks. */
+    fun depth(x: Int, z: Int, d: Float, edge: Float): Int {
+        val main = (1 - d / edge).coerceAtLeast(0f).pow(0.72f) * 16f
+        val forgeCrag = (1 - hypot(x + 9f, z - 6f) / 7f).coerceAtLeast(0f).pow(1.4f) * 5.2f
+        val libCrag = (1 - hypot(x + 9f, z + 9f) / 7f).coerceAtLeast(0f).pow(1.4f) * 4.5f
+        val portalCrag = (1 - hypot(x - 8f, z + 7f) / 6.5f).coerceAtLeast(0f).pow(1.4f) * 4.8f
+        val strata = fbm(x * 0.28f, z * 0.28f, 14) * 3.0f + valueNoise(x * 0.35f, z * 0.35f, 4) * 2.4f
+        return (main + 0.55f * (forgeCrag + libCrag + portalCrag) + strata).roundToInt().coerceIn(2, 24)
+    }
 
     /** A column of island from [depth] below zero up to [top], filling only what is empty. */
     fun column(x: Int, z: Int, top: Int, depth: Int, surface: Block) {
+        val dirt = 1 + (hash(x, z, 19) * 2.2f).toInt()
         for (y in -depth..top) {
             if (w[x, y, z] != null) continue
+            val deepCutoff = -depth * 0.5f + (hash(x, y + z * 7, 31) - 0.5f) * 2.4f
             w[x, y, z] = when {
                 y == top -> surface
-                y >= top - 2 -> Block.Dirt
-                y < -depth * 0.5f -> Block.Deep
+                y >= top - dirt -> Block.Dirt
+                y < deepCutoff -> Block.Deep
                 else -> Block.Stone
             }
         }
@@ -412,8 +423,10 @@ private class Builder(val w: World, val rng: Rng) {
         // Lily pads and reeds.
         w[cx - 1, G, cz + 1] = Block.LilyPad
         w[cx + 1, G, cz - 1] = Block.LilyPad
+        w[cx + 2, G, cz + 1] = Block.LilyPad
         w[cx - 2, G, cz - 1] = Block.Reeds
         w[cx - 2, G + 1, cz - 1] = Block.Reeds
+        w[cx + 2, G, cz - 2] = Block.Reeds
     }
 
     /** A stream from the pond to the east rim, then a column of water falling past the rock. */
@@ -436,8 +449,74 @@ private class Builder(val w: World, val rng: Rng) {
             }
             x++
         }
+        if (w[x - 1, G - 2, cz] != null) w[x - 1, G - 2, cz] = Block.MossyCobble
+        if (w[x - 1, G, cz - 1] != null) w[x - 1, G + 1, cz - 1] = Block.Moss
+        if (w[x - 1, G, cz + 1] != null) w[x - 1, G + 1, cz + 1] = Block.CobbleSlab
         for (y in G - 1 downTo -30) w[x, y, cz] = Block.Fall
         emitters += Emitter(Emitter.Kind.Mist, x + 0.5f, G - 0.5f, cz + 0.5f, 0.6f)
+        emitters += Emitter(Emitter.Kind.Mist, x + 0.5f, G - 7.5f, cz + 0.5f, 0.45f)
+    }
+
+    /** An arched timber footbridge crossing the waterfall stream near the east meadow. */
+    fun bridge() {
+        val xs = listOf(10, 11).filter { w[it, G - 1, 4] == Block.Water }
+        if (xs.isEmpty()) return
+        val x0 = xs.first()
+        val x1 = xs.last()
+        for (x in x0..x1) {
+            fill(x, G + 1, 2, x, G + 2, 2, null)
+            fill(x, G + 1, 6, x, G + 2, 6, null)
+            w[x, G + 1, 3] = Block.OakSlab
+            w[x, G + 1, 4] = Block.OakPlanks
+            w[x, G + 1, 5] = Block.OakSlab
+            w[x, G + 2, 3] = Block.Fence
+            w[x, G + 2, 5] = Block.Fence
+        }
+        w[x0, G + 3, 3] = Block.Lantern
+        reserve(x0 - 1, 2, x1 + 1, 6)
+    }
+
+    /** North ridge stone-and-copper beacon spire, echoing Lumi's lantern silhouette from afar. */
+    fun lanternSpire(cx: Int, cz: Int) {
+        pad(cx - 1, cz - 1, cx + 1, cz + 1, G + 1, Block.StoneBricks)
+        fill(cx - 1, G + 2, cz - 1, cx + 1, G + 2, cz + 1, Block.MossyBricks)
+        fill(cx - 1, G + 3, cz - 1, cx + 1, G + 3, cz + 1, Block.StoneBricks)
+        for ((px, pz) in listOf(cx - 1 to cz - 1, cx + 1 to cz - 1, cx - 1 to cz + 1, cx + 1 to cz + 1)) {
+            fill(px, G + 4, pz, px, G + 6, pz, Block.OakLog)
+        }
+        w[cx, G + 4, cz] = Block.Lantern
+        w[cx, G + 5, cz] = Block.Chain
+        w[cx, G + 6, cz] = Block.Glowstone
+        for (dx in -2..2) for (dz in -2..2) {
+            if (abs(dx) == 2 && abs(dz) == 2) continue
+            w[cx + dx, G + 7, cz + dz] = Block.CopperSlab
+        }
+        fill(cx - 1, G + 8, cz - 1, cx + 1, G + 8, cz + 1, Block.CopperBlock)
+        w[cx, G + 9, cz] = Block.CopperBlock
+        w[cx, G + 10, cz] = Block.Lantern
+        reserve(cx - 2, cz - 2, cx + 2, cz + 2)
+    }
+
+    /** A weathered spruce sky-jetty jutting off the south-east rim into the open air. */
+    fun skyDock(x0: Int, z0: Int) {
+        val endX = x0 + 5
+        pad(x0 - 1, z0 - 1, x0, z0 + 1, G + 1, Block.Path)
+        fill(x0 + 1, G + 1, z0 - 1, endX - 1, G + 1, z0 + 1, Block.SprucePlanks)
+        fill(endX, G + 1, z0 - 1, endX, G + 1, z0 + 1, Block.SpruceSlab)
+        for ((px, pz) in listOf(x0 + 2 to z0 - 1, x0 + 2 to z0 + 1, x0 + 4 to z0 - 1, x0 + 4 to z0 + 1)) {
+            fill(px, G - 2, pz, px, G + 2, pz, Block.OakLog)
+        }
+        w[x0 + 3, G + 2, z0 - 1] = Block.Fence
+        w[x0 + 3, G + 3, z0 - 1] = Block.Lantern
+        w[x0 + 3, G + 2, z0 + 1] = Block.Fence
+        w[x0 + 1, G + 2, z0 - 1] = Block.Barrel
+        w[x0 + 1, G + 2, z0 + 1] = Block.Chest
+        w[endX, G + 2, z0] = Block.Fence
+        w[endX, G + 3, z0] = Block.OakLog
+        w[endX + 1, G + 3, z0] = Block.OakLog
+        w[endX + 1, G + 2, z0] = Block.Chain
+        w[endX + 1, G + 1, z0] = Block.Lantern
+        reserve(x0 - 1, z0 - 2, endX + 1, z0 + 2)
     }
 
     /**
@@ -461,6 +540,8 @@ private class Builder(val w: World, val rng: Rng) {
         fill(x0 + 1, G + 1, z0 + 1, x0 + 2, G + 1, z0 + 1, Block.LavaCauldron)
         fill(x0 + 1, G + 3, z0 + 1, x0 + 2, G + 3, z0 + 1, Block.Bricks)
         fill(x0 + 1, G + 1, z0, x0 + 2, G + 9, z0, Block.Bricks)
+        fill(x0 + 1, G + 10, z0, x0 + 2, G + 10, z0, Block.CobbleSlab)
+        fill(x0 - 1, G + 1, z0 + 2, x0 - 1, G + 1, z0 + 3, Block.OakLog, 2)
         fill(x0 + 1, G + 2, z0 + 1, x0 + 2, G + 2, z0 + 1, null)
         emitters += Emitter(Emitter.Kind.Smoke, x0 + 2f, G + 10f, z0 + 0.5f, 0.5f)
         emitters += Emitter(Emitter.Kind.Embers, x0 + 2f, G + 2.1f, z0 + 1.5f, 0.8f)
@@ -559,6 +640,9 @@ private class Builder(val w: World, val rng: Rng) {
         fill(x0 + 1, G + 4, z1, x1 - 1, G + 4, z1, Block.OakLog, 1)
         roofAlongZ(x0 - 1, x1 + 1, z0 - 1, z1 + 1, G + 5, Block.CherryStairs, Block.CherryPlanks)
         hang(x0 + 4, G + 3, z0 + 2)
+        // A quiet outdoor reading bench against the open west terrace.
+        w.put(x0 - 2, G + 1, z0 + 3, Block.OakStairs, Facing.WEST)
+        w.put(x0 - 2, G + 1, z0 + 4, Block.OakStairs, Facing.WEST)
         // Lanterns on posts on the open side.
         for (z in intArrayOf(z0 + 1, z1 - 1)) {
             w[x0 - 2, G + 1, z] = Block.Fence
@@ -575,6 +659,7 @@ private class Builder(val w: World, val rng: Rng) {
         pad(cx - 4, cz - 3, cx + 5, cz + 3, G, Block.BlackstoneBricks)
         fill(cx - 3, G + 1, cz - 1, cx + 4, G + 1, cz + 1, Block.Blackstone)
         fill(cx - 2, G + 1, cz + 2, cx + 3, G + 1, cz + 2, Block.BrickSlab)
+        fill(cx, G + 1, cz + 2, cx + 1, G + 1, cz + 2, Block.CobbleStairs, Facing.NORTH)
         val x0 = cx - 1
         val x1 = cx + 2
         val y0 = G + 2
@@ -592,8 +677,9 @@ private class Builder(val w: World, val rng: Rng) {
             w[x, G + 2, cz + 1] = Block.Fence
             w[x, G + 3, cz + 1] = Block.SoulLantern
         }
-        // A broken-off pillar and loose obsidian, as if the portal was found rather than built.
+        // A broken-off pillar, loose obsidian, and a crystal shard beside the arch.
         fill(cx + 4, G + 2, cz - 1, cx + 4, G + 3, cz - 1, Block.Obsidian)
+        w[cx + 3, G + 2, cz - 1] = Block.Amethyst
         w[cx - 3, G + 2, cz - 1] = Block.CryingObsidian
         reserve(cx - 5, cz - 4, cx + 6, cz + 4)
     }
@@ -659,12 +745,44 @@ private class Builder(val w: World, val rng: Rng) {
     fun trees() {
         // Placed around the camera's views of the places, not in them.
         cherry(0, -1, big = true)
-        cherry(7, 12, big = false)
-        oak(12, 7)
-        oak(-13, 1)
-        birch(10, 10)
-        birch(-15, -5)
-        for ((x, z) in listOf(5 to 13, -6 to 1)) bush(x, z)
+        cherry(6, 12, big = false)
+        oak(11, 7)
+        birch(11, -1)
+        spruce(-13, 0)
+        spruce(-2, -10)
+        // A quiet garden bench tucked under the central cherry tree.
+        val bt = top(2, 1)
+        if (bt != null && top(3, 1) == bt && key(2, 1) !in reserved && key(3, 1) !in reserved) {
+            w.put(2, bt + 1, 1, Block.OakStairs, Facing.SOUTH)
+            w.put(3, bt + 1, 1, Block.OakStairs, Facing.SOUTH)
+            reserved += key(2, 1)
+            reserved += key(3, 1)
+        }
+        for ((x, z) in listOf(5 to 13, -6 to 1, 4 to -12)) bush(x, z)
+    }
+
+    fun spruce(x: Int, z: Int) {
+        val y = top(x, z) ?: return
+        if (key(x, z) in reserved) return
+        val trunk = 6 + (rng.next() * 2).toInt()
+        for (i in 1..trunk) w[x, y + i, z] = Block.OakLog
+        val top = y + trunk + 1
+        for (ly in y + 3..top) {
+            val layer = top - ly
+            val r = when {
+                layer <= 0 -> 0
+                layer <= 2 -> 1
+                layer % 2 == 1 -> 2
+                else -> 1
+            }
+            for (dx in -r..r) for (dz in -r..r) {
+                if (r >= 2 && abs(dx) == 2 && abs(dz) == 2) continue
+                if (dx == 0 && dz == 0 && ly < top) continue
+                if (w[x + dx, ly, z + dz] == null) w[x + dx, ly, z + dz] = Block.SpruceLeaves
+            }
+        }
+        w[x, top, z] = Block.SpruceLeaves
+        reserved += key(x, z)
     }
 
     fun cherry(x: Int, z: Int, big: Boolean) {
@@ -803,30 +921,40 @@ private class Builder(val w: World, val rng: Rng) {
             var low = Int.MAX_VALUE
             for (y in -30..G) if (w[x, y, z] != null) { low = y; break }
             if (low == Int.MAX_VALUE) continue
-            // Ores on the surface of the rock.
+            // Ores and a small southeast crystal hollow on the surface of the rock.
             for (y in low..G - 3) {
                 val block = w[x, y, z]
                 if (block != Block.Stone && block != Block.Deep) continue
                 val exposed = w[x + 1, y, z] == null || w[x - 1, y, z] == null || w[x, y, z + 1] == null || w[x, y, z - 1] == null || w[x, y - 1, z] == null
-                if (exposed && rng.next() < 0.045f) w[x, y, z] = ores[(rng.next() * ores.size).toInt().coerceAtMost(ores.size - 1)]
-                else if (exposed && block == Block.Stone && rng.next() < 0.04f) w[x, y, z] = Block.Moss
+                if (!exposed) continue
+                if (x in 5..9 && z in 10..14 && y in -8..-4 && rng.next() < 0.35f) {
+                    w[x, y, z] = if (rng.next() < 0.65f) Block.Amethyst else Block.Moss
+                } else if (rng.next() < 0.048f) {
+                    w[x, y, z] = ores[(rng.next() * ores.size).toInt().coerceAtMost(ores.size - 1)]
+                } else if (block == Block.Stone && rng.next() < 0.045f) {
+                    w[x, y, z] = Block.Moss
+                }
             }
             val r = rng.next()
             when {
-                r < 0.07f -> {
-                    val length = 1 + (rng.next() * 3).toInt()
+                r < 0.08f -> {
+                    val length = 1 + (rng.next() * 4).toInt()
                     for (i in 1..length) w[x, low - i, z] = Block.GlowVine
                 }
-                r < 0.15f -> w[x, low - 1, z] = Block.Roots
+                r < 0.16f -> w[x, low - 1, z] = Block.Roots
             }
         }
     }
 
     /** Floating rocks around the island, each with a patch of grass. */
     fun rocks() {
-        for ((cx, cy, cz, r) in listOf(
-            Rock(-24, 5, -9, 2.8f), Rock(21, -4, 13, 2.4f), Rock(-15, -10, 21, 2f), Rock(18, 8, -18, 1.8f), Rock(-5, -14, -24, 1.6f),
-        )) {
+        val list = listOf(
+            Rock(-24, 5, -9, 2.8f), Rock(22, -6, 6, 2.1f), Rock(-15, -10, 21, 2f),
+            Rock(18, 8, -18, 1.8f), Rock(-5, -14, -24, 1.6f),
+            Rock(-18, -3, -15, 2.0f), Rock(9, -9, 22, 1.9f),
+        )
+        for ((index, rock) in list.withIndex()) {
+            val (cx, cy, cz, r) = rock
             for (ix in -4..4) for (iz in -4..4) {
                 val dd = hypot(ix.toFloat(), iz.toFloat())
                 if (dd > r) continue
@@ -840,6 +968,14 @@ private class Builder(val w: World, val rng: Rng) {
                     }
                 }
                 if (dd < r - 0.8f && rng.next() < 0.3f) w[cx + ix, cy + 1, cz + iz] = if (rng.next() < 0.5f) Block.TallGrass else Block.Dandelion
+            }
+            if (index == 0) {
+                w[cx, cy + 1, cz] = Block.OakLog
+                w[cx, cy + 2, cz] = Block.OakLog
+                for ((dx, dz) in listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1, 0 to 0)) {
+                    val ly = if (dx == 0 && dz == 0) cy + 3 else cy + 2
+                    w[cx + dx, ly, cz + dz] = Block.Leaves
+                }
             }
             // Under the deepest point: 4.5 blocks of rock at the centre, plus the grass layer.
             if (rng.next() < 0.8f) w[cx, cy - 7, cz] = Block.GlowVine

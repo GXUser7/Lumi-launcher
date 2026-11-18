@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DriveFileRenameOutline
@@ -62,7 +63,6 @@ import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -110,6 +110,7 @@ import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.FieldShape
 import com.yumi.launcher.ui.components.FormSection
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.Label
@@ -123,6 +124,10 @@ import com.yumi.launcher.ui.components.ToggleRow
 import com.yumi.launcher.ui.components.gigabytes
 import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.home.PackRequest
+import com.yumi.launcher.ui.theme.PopGlassAlpha
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
+import com.yumi.launcher.ui.theme.glassTint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.FileDialog
@@ -273,7 +278,14 @@ private fun PackList(
         model.manifestError?.let { ErrorLine(it) { model.refreshVersions() } }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(packs, key = { it.id }) { instance ->
-                PackCard(model, instance, chosen = instance.id == model.selected?.id, onEdit = { onEdit(instance) }, onPlay = { onPlay(instance) })
+                PackCard(
+                    model,
+                    instance,
+                    chosen = instance.id == model.selected?.id,
+                    onSelect = { model.select(instance) },
+                    onEdit = { onEdit(instance) },
+                    onPlay = { onPlay(instance) },
+                )
             }
         }
     }
@@ -378,7 +390,12 @@ private fun SkippedFiles(model: LauncherModel, pack: Instance, skipped: List<Ski
 internal fun ImportProgress(model: LauncherModel, modifier: Modifier = Modifier) {
     val imports = model.packImports
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainerHigh, modifier = modifier) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = glassContainer(elevated = true),
+        border = glassInnerBorder(elevated = true),
+        modifier = modifier,
+    ) {
         Column(Modifier.padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LoadingIndicator(Modifier.size(32.dp))
@@ -395,7 +412,14 @@ internal fun ImportProgress(model: LauncherModel, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun PackCard(model: LauncherModel, instance: Instance, chosen: Boolean, onEdit: () -> Unit, onPlay: () -> Unit) {
+private fun PackCard(
+    model: LauncherModel,
+    instance: Instance,
+    chosen: Boolean,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onPlay: () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     val mods by produceState(-1, instance.id) {
         value = withContext(Dispatchers.IO) { model.instances.modsDir(instance).listFiles().orEmpty().count { it.name.endsWith(".jar") } }
@@ -403,8 +427,8 @@ private fun PackCard(model: LauncherModel, instance: Instance, chosen: Boolean, 
     Surface(
         onClick = onEdit,
         shape = RoundedCornerShape(26.dp),
-        color = if (chosen) scheme.surfaceContainerHigh else scheme.surfaceContainer,
-        border = if (chosen) BorderStroke(2.dp, scheme.primary) else null,
+        color = glassContainer(elevated = chosen),
+        border = if (chosen) BorderStroke(2.dp, scheme.primary) else glassInnerBorder(),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -429,7 +453,15 @@ private fun PackCard(model: LauncherModel, instance: Instance, chosen: Boolean, 
                     Hint(played(instance))
                 }
             }
-            Spacer(Modifier.width(8.dp))
+            if (!chosen) {
+                Spacer(Modifier.width(4.dp))
+                Tip("Выбрать для игры") {
+                    IconButton(onClick = onSelect) {
+                        Icon(Icons.Rounded.CheckCircleOutline, "Выбрать «${instance.name}»", tint = scheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Spacer(Modifier.width(6.dp))
             Tip("Играть в «${instance.name}»") {
                 if (chosen) {
                     FilledIconButton(onClick = onPlay, enabled = !model.busy, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(52.dp)) {
@@ -709,7 +741,7 @@ private fun LoaderVersionPicker(loader: Loader, minecraft: String, selected: Str
                 if (!list.isNullOrEmpty()) Icon(Icons.Rounded.UnfoldMore, null, tint = scheme.onSurfaceVariant)
             }
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp), modifier = Modifier.heightIn(max = 360.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 360.dp)) {
             DropdownMenuItem(
                 text = { Text("Автоматически — последняя стабильная") },
                 trailingIcon = { if (selected == null) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
@@ -753,8 +785,9 @@ private fun VersionPicker(model: LauncherModel, current: String, onBack: () -> U
                     Surface(
                         onClick = { onPick(v) },
                         shape = CircleShape,
-                        color = if (v == current) scheme.primary else scheme.surfaceContainerHigh,
+                        color = if (v == current) scheme.primary else glassContainer(elevated = true),
                         contentColor = if (v == current) scheme.onPrimary else scheme.onSurface,
+                        border = if (v == current) null else glassInnerBorder(elevated = true),
                     ) {
                         Text(v, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
                     }
@@ -777,7 +810,7 @@ private fun VersionPicker(model: LauncherModel, current: String, onBack: () -> U
                         group,
                         style = MaterialTheme.typography.titleSmall,
                         color = scheme.primary,
-                        modifier = Modifier.fillMaxWidth().background(scheme.surface).padding(start = 6.dp, top = 8.dp, bottom = 4.dp),
+                        modifier = Modifier.fillMaxWidth().background(glassTint(PopGlassAlpha)).padding(start = 6.dp, top = 8.dp, bottom = 4.dp),
                     )
                 }
                 items(versions, key = { it.id }) { entry ->
@@ -786,7 +819,8 @@ private fun VersionPicker(model: LauncherModel, current: String, onBack: () -> U
                     Surface(
                         onClick = { onPick(entry.id) },
                         shape = RoundedCornerShape(16.dp),
-                        color = if (picked) scheme.primaryContainer else scheme.surfaceContainer,
+                        color = if (picked) scheme.primaryContainer else glassContainer(),
+                        border = if (picked) null else glassInnerBorder(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

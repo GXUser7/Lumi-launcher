@@ -68,6 +68,8 @@ import com.yumi.launcher.ui.components.hasNonAscii
 import com.yumi.launcher.ui.components.pickFolder
 import com.yumi.launcher.ui.components.pickJava
 import com.yumi.launcher.ui.packs.MemorySlider
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import java.io.File
 
 @Composable
@@ -302,8 +304,8 @@ private fun PaletteSwatch(palette: Palette, picked: Boolean, dark: Boolean, modi
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
-        color = if (picked) scheme.surfaceContainerHighest else LocalFieldContainer.current ?: scheme.surfaceContainer,
-        border = if (picked) BorderStroke(2.dp, scheme.primary) else null,
+        color = if (picked) glassContainer(elevated = true) else LocalFieldContainer.current ?: glassContainer(),
+        border = if (picked) BorderStroke(2.dp, scheme.primary) else glassInnerBorder(),
         modifier = modifier.semantics { role = Role.RadioButton; this.selected = picked },
     ) {
         Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {

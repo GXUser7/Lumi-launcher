@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -34,17 +35,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PlayStatus
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 
 /** The running game's output — the first place to look when a pack will not start. */
 @Composable
-fun ConsoleScreen(model: LauncherModel) {
+fun ConsoleScreen(model: LauncherModel, onBack: () -> Unit = {}) {
     val scheme = MaterialTheme.colorScheme
     val list = rememberLazyListState()
     LaunchedEffect(model.log.size) { if (model.log.isNotEmpty()) list.scrollToItem(model.log.lastIndex) }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад") }
+            Spacer(Modifier.width(4.dp))
             Column(Modifier.weight(1f)) {
                 Text("Консоль", style = MaterialTheme.typography.displaySmall)
                 Text(
@@ -71,7 +76,7 @@ fun ConsoleScreen(model: LauncherModel) {
                 Icon(Icons.Outlined.FolderOpen, "Папка логов")
             }
         }
-        Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().weight(1f)) {
+        Surface(shape = RoundedCornerShape(20.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth().weight(1f)) {
             if (model.log.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
                     Text("Здесь появится вывод игры, когда она запустится.", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)

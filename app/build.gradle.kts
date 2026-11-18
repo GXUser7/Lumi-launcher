@@ -26,7 +26,7 @@ compose.desktop {
             targetFormats(TargetFormat.Msi)
             // The folder and the .exe; the name people see comes from the installer (installer/LumiLauncher.iss).
             packageName = "LumiLauncher"
-            packageVersion = "1.1.0"
+            packageVersion = "1.2.0"
             description = "Lumi Launcher"
             vendor = "Lumi"
             // The whole JDK: the launcher reaches for java.net.http, prefs, management and TLS, and a

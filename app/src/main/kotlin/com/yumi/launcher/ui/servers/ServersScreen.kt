@@ -40,7 +40,6 @@ import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -73,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Loader
 import com.yumi.launcher.core.SavedWorld
 import com.yumi.launcher.core.SavedWorlds
+import com.yumi.launcher.core.Support
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ServerAuth
@@ -84,6 +84,7 @@ import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.FieldShape
 import com.yumi.launcher.ui.components.FormSection
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.LocalFieldContainer
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.Label
@@ -95,13 +96,13 @@ import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.home.ServerView
 import com.yumi.launcher.ui.home.ServersTab
 import com.yumi.launcher.ui.packs.MemorySlider
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.Desktop
-import java.net.URI
 
 /**
  * Servers, in two halves. "Мои серверы": servers this computer runs from a pack — created,
@@ -176,7 +177,8 @@ private fun HostedList(model: LauncherModel, onCreate: () -> Unit, onOpen: (Serv
             Surface(
                 onClick = { onOpen(profile) },
                 shape = RoundedCornerShape(24.dp),
-                color = if (session.status.active) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
+                color = glassContainer(elevated = session.status.active),
+                border = glassInnerBorder(elevated = session.status.active),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -200,7 +202,7 @@ private fun HostedList(model: LauncherModel, onCreate: () -> Unit, onOpen: (Serv
 @Composable
 private fun EmptyHosted(onCreate: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(28.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(28.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ShapeTile(Icons.Rounded.Dns, scheme.primaryContainer, scheme.onPrimaryContainer, 64.dp)
             Text("Свой сервер для друзей", style = MaterialTheme.typography.headlineSmall)
@@ -382,7 +384,8 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
             Surface(
                 onClick = { eula = !eula },
                 shape = RoundedCornerShape(24.dp),
-                color = if (eula) scheme.primaryContainer else scheme.surfaceContainer,
+                color = if (eula) scheme.primaryContainer else glassContainer(),
+                border = if (eula) null else glassInnerBorder(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(Modifier.padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -394,7 +397,7 @@ private fun CreateServer(model: LauncherModel, onBack: () -> Unit, onCreated: (S
                             append(" — без него сервер не запускается")
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f).clickable { runCatching { Desktop.getDesktop().browse(URI("https://aka.ms/MinecraftEULA")) } },
+                        modifier = Modifier.weight(1f).clickable { Support.open("https://aka.ms/MinecraftEULA") },
                     )
                 }
             }
@@ -469,7 +472,7 @@ internal fun PackField(model: LauncherModel, pack: Instance?, onPick: (Instance)
                 Icon(Icons.Rounded.UnfoldMore, "Выбрать сборку", tint = scheme.onSurfaceVariant)
             }
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { Text("${instance.name} · ${instance.loader.label} ${instance.version}") },

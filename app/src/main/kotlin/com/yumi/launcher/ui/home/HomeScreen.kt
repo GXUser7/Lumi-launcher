@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,14 +24,15 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -59,11 +61,14 @@ import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PlayStatus
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.Label
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.PlayButton
 import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.components.SkinHead
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.delay
 
 @Composable
@@ -84,7 +89,7 @@ fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit) {
         )
         Label("Аккаунт")
         Box(Modifier.guide(state, GuideAnchor.Account)) { AccountSelector(model, state) }
-        Box(Modifier.fillMaxWidth().height(80.dp)) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 76.dp)) {
             AnimatedContent(settings.account, transitionSpec = { fadeIn(tween(200, delayMillis = 60)) togetherWith fadeOut(tween(80)) }) { kind ->
                 when {
                     kind == AccountKind.Offline -> NickField(model)
@@ -116,12 +121,13 @@ private fun AccountSelector(model: LauncherModel, state: LauncherState) {
         Surface(
             onClick = { open = true },
             shape = RoundedCornerShape(22.dp),
-            color = scheme.surfaceContainer,
+            color = glassContainer(),
+            border = glassInnerBorder(),
             modifier = Modifier.fillMaxWidth().height(68.dp),
         ) {
             Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (active != null) AccountFace(active.kind, active.skin, 48.dp)
-                else ShapeTile(Icons.Rounded.Person, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+                else ShapeTile(Icons.Rounded.Person, glassContainer(elevated = true), scheme.onSurfaceVariant, 48.dp)
                 Column(Modifier.weight(1f)) {
                     Text(
                         active?.name ?: when (settings.account) {
@@ -144,7 +150,7 @@ private fun AccountSelector(model: LauncherModel, state: LauncherState) {
                 Icon(Icons.Rounded.UnfoldMore, "Сменить аккаунт", tint = scheme.onSurfaceVariant)
             }
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             AccountMenuItems(model, state, onDone = { open = false })
         }
     }
@@ -155,7 +161,12 @@ private fun AccountSelector(model: LauncherModel, state: LauncherState) {
 private fun SignedIn(model: LauncherModel, kind: AccountKind) {
     val scheme = MaterialTheme.colorScheme
     val entry = model.accounts.all.firstOrNull { it.active }
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().height(72.dp)) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = glassContainer(),
+        border = glassInnerBorder(),
+        modifier = Modifier.fillMaxWidth().height(72.dp),
+    ) {
         Row(Modifier.padding(start = 12.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ShapeTile(if (kind == AccountKind.Microsoft) Icons.Rounded.VerifiedUser else Icons.Rounded.Key, scheme.primaryContainer, scheme.onPrimaryContainer, 44.dp)
             Column(Modifier.weight(1f)) {
@@ -228,9 +239,14 @@ private fun AccountRow(
     onSignOut: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().height(72.dp)) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = glassContainer(),
+        border = glassInnerBorder(),
+        modifier = Modifier.fillMaxWidth().height(72.dp),
+    ) {
         Row(Modifier.padding(start = 12.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (signedIn) SkinHead(skin, 48.dp) else ShapeTile(Icons.Rounded.Key, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+            if (signedIn) SkinHead(skin, 48.dp) else ShapeTile(Icons.Rounded.Key, glassContainer(elevated = true), scheme.onSurfaceVariant, 48.dp)
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -254,11 +270,12 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
             onClick = { if (selected == null) state.openPacks(PackRequest.Create) else open = true },
             enabled = !model.busy,
             shape = RoundedCornerShape(22.dp),
-            color = scheme.surfaceContainer,
+            color = glassContainer(),
+            border = glassInnerBorder(),
             modifier = Modifier.fillMaxWidth().height(68.dp),
         ) {
             Row(Modifier.padding(start = 10.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (selected != null) PackTile(selected, 48.dp) else ShapeTile(Icons.Rounded.Add, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 48.dp)
+                if (selected != null) PackTile(selected, 48.dp) else ShapeTile(Icons.Rounded.Add, glassContainer(elevated = true), scheme.onSurfaceVariant, 48.dp)
                 Column(Modifier.weight(1f)) {
                     Text(selected?.name ?: "Создайте сборку", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
@@ -272,7 +289,7 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
                 if (selected != null) Icon(Icons.Rounded.UnfoldMore, "Выбрать сборку", tint = scheme.onSurfaceVariant)
             }
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { PackMenuText(instance) },
@@ -282,6 +299,18 @@ private fun PackSelector(model: LauncherModel, state: LauncherState) {
                 )
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            if (selected != null) {
+                DropdownMenuItem(
+                    text = { Text("Настроить сборку") },
+                    leadingIcon = { Icon(Icons.Rounded.Tune, null) },
+                    onClick = { open = false; state.openPacks(PackRequest.Edit(selected.id)) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Моды сборки") },
+                    leadingIcon = { Icon(Icons.Rounded.Extension, null) },
+                    onClick = { open = false; state.section = Section.Mods },
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Новая сборка") },
                 leadingIcon = { Icon(Icons.Rounded.Add, null) },
@@ -343,7 +372,7 @@ private fun PlayRow(model: LauncherModel, state: LauncherState, onPlay: () -> Un
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val quiet = IconButtonDefaults.filledTonalIconButtonColors(containerColor = scheme.surfaceContainerHigh, contentColor = scheme.onSurfaceVariant)
+                val quiet = IconButtonDefaults.filledTonalIconButtonColors(containerColor = glassContainer(elevated = true), contentColor = scheme.onSurfaceVariant)
                 FilledTonalIconButton(
                     onClick = { selected?.let { model.openFolder(model.instances.gameDir(it)) } },
                     enabled = selected != null,

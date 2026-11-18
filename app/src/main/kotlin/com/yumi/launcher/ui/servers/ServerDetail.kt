@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -83,7 +84,6 @@ import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
@@ -148,6 +148,7 @@ import com.yumi.launcher.ui.components.Avatar
 import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.FormSection
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.Label
@@ -156,6 +157,11 @@ import com.yumi.launcher.ui.components.Tip
 import com.yumi.launcher.ui.components.ToggleRow
 import com.yumi.launcher.ui.home.ServerTab
 import com.yumi.launcher.ui.packs.MemorySlider
+import com.yumi.launcher.ui.theme.PopGlassAlpha
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
+import com.yumi.launcher.ui.theme.glassOutlineBrush
+import com.yumi.launcher.ui.theme.glassTint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -193,8 +199,8 @@ internal fun ServerDetail(
         val current = tab.takeIf { it in tabs } ?: ServerTab.Console
         ChoiceGroup(tabs, current, { it.label }, onTab, height = 44.dp) {
             if (it == current) {
-                Icon(it.icon, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
+                Icon(it.icon, null, Modifier.size(15.dp))
+                Spacer(Modifier.width(4.dp))
             }
         }
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -244,7 +250,7 @@ internal fun StatusPill(session: ServerSession) {
     val scheme = MaterialTheme.colorScheme
     val status = session.status
     val (container, content) = when (status) {
-        ServerStatus.Stopped -> scheme.surfaceContainerHighest to scheme.onSurfaceVariant
+        ServerStatus.Stopped -> glassContainer(elevated = true) to scheme.onSurfaceVariant
         is ServerStatus.Failed -> scheme.errorContainer to scheme.onErrorContainer
         is ServerStatus.Running -> scheme.primaryContainer to scheme.onPrimaryContainer
         else -> scheme.tertiaryContainer to scheme.onTertiaryContainer
@@ -330,7 +336,7 @@ private fun AddressCard(model: LauncherModel, profile: ServerProfile, session: S
             copied = null
         }
     }
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Адрес для друзей", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
@@ -373,7 +379,7 @@ private fun AddressCard(model: LauncherModel, profile: ServerProfile, session: S
 private fun AddressTile(address: LocalAddress, text: String, copied: Boolean, modifier: Modifier, onCopy: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val local = address.network == "Локальная сеть"
-    Surface(onClick = onCopy, shape = RoundedCornerShape(18.dp), color = scheme.surfaceContainerHighest, modifier = modifier) {
+    Surface(onClick = onCopy, shape = RoundedCornerShape(18.dp), color = glassContainer(elevated = true), border = glassInnerBorder(elevated = true), modifier = modifier) {
         Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ShapeTile(
                 if (local) Icons.Rounded.Lan else Icons.Rounded.VpnLock,
@@ -479,10 +485,10 @@ private fun Terminal(model: LauncherModel, profile: ServerProfile, session: Serv
             }
         }
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxSize()) {
+            Surface(shape = RoundedCornerShape(22.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxSize()) {
                 if (session.lines.isEmpty()) {
                     Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        ShapeTile(Icons.Rounded.Terminal, scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 52.dp)
+                        ShapeTile(Icons.Rounded.Terminal, glassContainer(elevated = true), scheme.onSurfaceVariant, 52.dp)
                         Spacer(Modifier.height(10.dp))
                         Hint(if (live) "Сервер запускается…" else "Здесь будет вывод сервера. Запустите его — и сюда же можно писать команды.")
                     }
@@ -578,7 +584,13 @@ private fun SuggestionPanel(items: List<Suggestion>, pick: Int, onPick: (Suggest
     val scheme = MaterialTheme.colorScheme
     val window = 6
     val start = (pick - window + 1).coerceIn(0, (items.size - window).coerceAtLeast(0))
-    Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainerHighest, shadowElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = scheme.surfaceContainerHighest.copy(alpha = 0.97f),
+        border = BorderStroke(1.dp, glassOutlineBrush()),
+        shadowElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Column(Modifier.padding(6.dp)) {
             items.subList(start, minOf(items.size, start + window)).forEachIndexed { i, item ->
                 val selected = start + i == pick && item.completion != null
@@ -637,7 +649,7 @@ private fun PlayerChip(name: String, onCommand: (String) -> Unit) {
             leadingIcon = { Icon(Icons.Rounded.Person, null, Modifier.size(18.dp)) },
             shape = CircleShape,
         )
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(16.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             listOf("op" to "Сделать оператором", "deop" to "Снять оператора", "kick" to "Выгнать", "ban" to "Забанить").forEach { (command, label) ->
                 DropdownMenuItem(text = { Text(label) }, onClick = { onCommand(command); open = false })
             }
@@ -993,7 +1005,7 @@ private fun BannedPlayers(model: LauncherModel, profile: ServerProfile, session:
 @Composable
 private fun BanRow(player: BannedPlayer, canPardon: Boolean, onPardon: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(22.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(offline = true, size = 44.dp)
             Spacer(Modifier.width(12.dp))
@@ -1078,9 +1090,9 @@ private fun ServerMods(model: LauncherModel, profile: ServerProfile, session: Se
             items(files, key = { it.name }) { file ->
                 val enabled = file.name.endsWith(".jar")
                 val base = file.name.removeSuffix(".disabled")
-                Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(20.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(start = 8.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ShapeTile(Icons.Rounded.Extension, scheme.surfaceContainerHighest, if (enabled) scheme.primary else scheme.outline, 36.dp)
+                        ShapeTile(Icons.Rounded.Extension, glassContainer(elevated = true), if (enabled) scheme.primary else scheme.outline, 36.dp)
                         Column(Modifier.weight(1f)) {
                             Text(
                                 base.removeSuffix(".jar"),

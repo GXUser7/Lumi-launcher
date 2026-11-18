@@ -28,7 +28,6 @@ import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -66,10 +65,13 @@ import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PingState
 import com.yumi.launcher.data.SavedServer
 import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.components.Tip
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import org.jetbrains.skia.Image as SkiaImage
 
 /** Other people's servers: add by address, see who is on, join with a pack in one click. */
@@ -130,7 +132,7 @@ private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: Ping
     val pack = model.instances[server.packId] ?: model.selected
     var renaming by remember { mutableStateOf(false) }
     var draft by remember(server.name) { mutableStateOf(server.name) }
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Favicon((ping as? PingState.Online)?.result?.favicon, 52.dp)
@@ -186,7 +188,7 @@ private fun SavedServerRow(model: LauncherModel, server: SavedServer, ping: Ping
 private fun Favicon(bytes: ByteArray?, size: androidx.compose.ui.unit.Dp) {
     val bitmap = remember(bytes) { bytes?.let { runCatching { SkiaImage.makeFromEncoded(it).toComposeImageBitmap() }.getOrNull() } }
     if (bitmap == null) {
-        ShapeTile(Icons.Rounded.Dns, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurfaceVariant, size)
+        ShapeTile(Icons.Rounded.Dns, glassContainer(elevated = true), MaterialTheme.colorScheme.onSurfaceVariant, size)
     } else {
         Image(bitmap, null, Modifier.size(size).clip(RoundedCornerShape(size * 0.22f)), filterQuality = FilterQuality.None)
     }
@@ -239,7 +241,7 @@ private fun SignalBars(latency: Long) {
 private fun PackChip(model: LauncherModel, pack: Instance?, onPick: (Instance) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Surface(onClick = { open = true }, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Surface(onClick = { open = true }, shape = CircleShape, color = glassContainer(elevated = true), border = glassInnerBorder(elevated = true)) {
             Row(Modifier.padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (pack != null) PackTile(pack, 24.dp)
                 Spacer(Modifier.width(6.dp))
@@ -247,7 +249,7 @@ private fun PackChip(model: LauncherModel, pack: Instance?, onPick: (Instance) -
                 Icon(Icons.Rounded.UnfoldMore, "Сборка для входа", Modifier.size(16.dp))
             }
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             Text("Заходить со сборкой", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
             HorizontalDivider()
             model.instances.all.forEach { instance ->
@@ -266,7 +268,7 @@ private fun RowMenu(onRename: () -> Unit, onDelete: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.MoreVert, "Ещё", Modifier.size(20.dp)) }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(16.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Переименовать") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = { open = false; onRename() })
             DropdownMenuItem(text = { Text("Удалить") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) }, onClick = { open = false; onDelete() })
         }

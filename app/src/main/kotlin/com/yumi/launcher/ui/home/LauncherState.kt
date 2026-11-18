@@ -57,6 +57,9 @@ sealed interface ServerPackTarget {
 /** The servers screen's two halves: servers this computer runs, and other people's to join. */
 enum class ServersTab(val label: String) { Hosted("Мои серверы"), QuickJoin("Быстрый вход") }
 
+/** The mods screen's two halves: browse the catalogue or manage installed content. */
+enum class ModsTab(val label: String) { Catalog("Каталог"), Installed("Установлено") }
+
 /** The tabs of one server's page. */
 enum class ServerTab(val label: String, val icon: ImageVector) {
     Console("Терминал", Icons.Rounded.Terminal),
@@ -80,6 +83,7 @@ class LauncherState {
     var packRequest by mutableStateOf<PackRequest?>(null)
 
     // Kept here rather than in the screen, so a server's terminal is still open after a trip to the home screen.
+    var modsTab by mutableStateOf(ModsTab.Catalog)
     var serversTab by mutableStateOf(ServersTab.Hosted)
     var serverView by mutableStateOf<ServerView>(ServerView.List)
     var serverTab by mutableStateOf(ServerTab.Console)
@@ -98,6 +102,10 @@ class LauncherState {
 
     /** The catalogue whose filters are in the panel right of the card; null — no panel. */
     var filters by mutableStateOf<FilterPanel?>(null)
+
+    /** Top bar popovers tracked here so shortcuts and headless checks can toggle/close them. */
+    var downloadsOpen by mutableStateOf(false)
+    var notificationsOpen by mutableStateOf(false)
 
     /** The modpack catalogue's search, kept here so the filters panel can change it and a return finds it as it was. */
     val packSearch = PackSearch()

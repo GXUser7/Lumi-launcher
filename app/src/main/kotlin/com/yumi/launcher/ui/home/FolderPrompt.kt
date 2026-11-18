@@ -40,7 +40,10 @@ import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.components.freeSpace
 import com.yumi.launcher.ui.components.hasNonAscii
 import com.yumi.launcher.ui.components.pickFolder
+import com.yumi.launcher.ui.theme.PopGlassAlpha
 import com.yumi.launcher.ui.theme.glass
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import java.io.File
 
 /**
@@ -59,7 +62,7 @@ fun FolderPrompt(onUse: (File) -> Unit, onCancel: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            Modifier.width(500.dp).glass(RoundedCornerShape(36.dp)).padding(28.dp),
+            Modifier.width(500.dp).glass(RoundedCornerShape(36.dp), alpha = PopGlassAlpha, elevation = 24.dp).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("Куда скачать Minecraft?", style = MaterialTheme.typography.headlineLarge)
@@ -68,7 +71,7 @@ fun FolderPrompt(onUse: (File) -> Unit, onCancel: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )
-            Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(20.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ShapeTile(Icons.Outlined.Folder, scheme.primaryContainer, scheme.onPrimaryContainer, 44.dp)
                     Column(Modifier.weight(1f)) {

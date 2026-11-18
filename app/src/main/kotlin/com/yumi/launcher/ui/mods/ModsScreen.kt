@@ -48,7 +48,6 @@ import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -80,13 +79,16 @@ import com.yumi.launcher.core.SearchFilter
 import com.yumi.launcher.core.ModDetails
 import com.yumi.launcher.core.ModHit
 import com.yumi.launcher.core.ModSource
+import com.yumi.launcher.core.Support
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ModEntry
 import com.yumi.launcher.ui.components.ChoiceGroup
 import com.yumi.launcher.ui.components.CurseForgeKeyPrompt
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.home.FilterPanel
 import com.yumi.launcher.ui.home.LauncherState
+import com.yumi.launcher.ui.home.ModsTab
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.RemoteIcon
@@ -95,10 +97,8 @@ import com.yumi.launcher.ui.components.SearchField
 import com.yumi.launcher.ui.components.choiceColors
 import com.yumi.launcher.ui.components.compactCount
 import com.yumi.launcher.ui.components.connectedShapes
-import java.awt.Desktop
-import java.net.URI
-
-private enum class Tab(val label: String) { Catalog("Каталог"), Installed("Установлено") }
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 
 /**
  * Mods, shaders and resource packs for one pack: the Modrinth or CurseForge catalogue, filtered to
@@ -111,7 +111,6 @@ fun ModsScreen(model: LauncherModel, state: LauncherState, onEditPack: (Instance
     val mods = model.mods
     var packId by remember { mutableStateOf(model.selected?.id) }
     val pack = model.instances[packId] ?: model.selected
-    var tab by remember { mutableStateOf(Tab.Catalog) }
     var selectedHit by remember { mutableStateOf<ModHit?>(null) }
     val catalogList = rememberLazyListState()
 
@@ -130,7 +129,7 @@ fun ModsScreen(model: LauncherModel, state: LauncherState, onEditPack: (Instance
         transitionSpec = { fadeIn(tween(200, delayMillis = 70)) togetherWith fadeOut(tween(70)) },
     ) { hit ->
         if (hit != null && pack != null) ModDetail(model, pack, hit, onBack = { selectedHit = null })
-        else ModsList(model, state, pack, tab, { tab = it }, catalogList, onPickPack = { packId = it.id }, onEditPack = onEditPack, onOpen = { selectedHit = it })
+        else ModsList(model, state, pack, state.modsTab, { state.modsTab = it }, catalogList, onPickPack = { packId = it.id }, onEditPack = onEditPack, onOpen = { selectedHit = it })
     }
 }
 
@@ -139,8 +138,8 @@ private fun ModsList(
     model: LauncherModel,
     state: LauncherState,
     pack: Instance?,
-    tab: Tab,
-    onTab: (Tab) -> Unit,
+    tab: ModsTab,
+    onTab: (ModsTab) -> Unit,
     catalogList: LazyListState,
     onPickPack: (Instance) -> Unit,
     onEditPack: (Instance) -> Unit,
@@ -163,18 +162,18 @@ private fun ModsList(
             !mods.searchable(pack) -> NeedsLoader(pack, mods.type) { onEditPack(pack) }
             else -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                    Tab.entries.forEachIndexed { i, t ->
+                    ModsTab.entries.forEachIndexed { i, t ->
                         ToggleButton(
                             checked = tab == t,
                             onCheckedChange = { onTab(t) },
-                            shapes = connectedShapes(i, Tab.entries.size),
+                            shapes = connectedShapes(i, ModsTab.entries.size),
                             colors = choiceColors(),
                             modifier = Modifier.weight(1f).height(40.dp),
-                        ) { Text(if (t == Tab.Installed) "${t.label} · ${mods.installed.size}" else t.label, style = MaterialTheme.typography.labelLarge) }
+                        ) { Text(if (t == ModsTab.Installed) "${t.label} · ${mods.installed.size}" else t.label, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
                 mods.notice?.let { Notice(it) { mods.notice = null } }
-                if (tab == Tab.Catalog) Catalog(model, state, pack, catalogList, onOpen) else Installed(model, pack)
+                if (tab == ModsTab.Catalog) Catalog(model, state, pack, catalogList, onOpen) else Installed(model, pack)
             }
         }
     }
@@ -184,7 +183,12 @@ private fun ModsList(
 private fun PackPicker(model: LauncherModel, pack: Instance?, onPick: (Instance) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Surface(onClick = { open = true }, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Surface(
+            onClick = { open = true },
+            shape = CircleShape,
+            color = glassContainer(elevated = true),
+            border = glassInnerBorder(elevated = true),
+        ) {
             Row(Modifier.padding(start = 6.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (pack != null) PackTile(pack, 32.dp)
                 Spacer(Modifier.width(8.dp))
@@ -195,7 +199,7 @@ private fun PackPicker(model: LauncherModel, pack: Instance?, onPick: (Instance)
                 Icon(Icons.Rounded.UnfoldMore, "Выбрать сборку", Modifier.size(20.dp))
             }
         }
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }) {
             model.instances.all.forEach { instance ->
                 DropdownMenuItem(
                     text = { Text("${instance.name} · ${instance.loader.label} ${instance.version}") },
@@ -218,7 +222,7 @@ private fun kindIcon(kind: ContentType) = when (kind) {
 
 @Composable
 private fun NeedsLoader(pack: Instance, kind: ContentType, onEdit: () -> Unit) {
-    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Нужен загрузчик модов", style = MaterialTheme.typography.titleLarge)
             Hint(
@@ -336,7 +340,7 @@ private fun Catalog(model: LauncherModel, state: LauncherState, pack: Instance, 
 @Composable
 private fun HitRow(hit: ModHit, installing: Boolean, installed: Boolean, onOpen: () -> Unit, onInstall: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(onClick = onOpen, shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = onOpen, shape = RoundedCornerShape(22.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             RemoteIcon(hit.iconUrl, kindIcon(hit.type), 52.dp)
             Column(Modifier.weight(1f)) {
@@ -383,7 +387,7 @@ private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack:
             Text(hit.title, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(shape = RoundedCornerShape(28.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(28.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RemoteIcon(hit.iconUrl, kindIcon(hit.type), 76.dp)
@@ -411,7 +415,7 @@ private fun ModDetail(model: LauncherModel, pack: Instance, hit: ModHit, onBack:
                                 Text(if (installing) "Устанавливаем…" else "Установить в «${pack.name}»", maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }) {
+                        TextButton(onClick = { Support.open(hit.pageUrl) }) {
                             Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Страница")
@@ -456,7 +460,7 @@ private fun Description(text: String) {
     val scheme = MaterialTheme.colorScheme
     var open by remember(text) { mutableStateOf(false) }
     val long = text.length > 900
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Описание", style = MaterialTheme.typography.titleMedium)
             Text(
@@ -505,7 +509,13 @@ private fun categoryLabel(slug: String): String? = when (slug.lowercase()) {
 @Composable
 private fun Installed(model: LauncherModel, pack: Instance) {
     val mods = model.mods
-    val scheme = MaterialTheme.colorScheme
+    var query by remember(mods.type, pack.id) { mutableStateOf("") }
+    val filtered = remember(mods.installed.size, mods.installed, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) mods.installed else mods.installed.filter {
+            q in it.title.lowercase() || q in it.file.name.lowercase()
+        }
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Hint(
             when (mods.type) {
@@ -521,9 +531,21 @@ private fun Installed(model: LauncherModel, pack: Instance) {
             Text("Папка")
         }
     }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(mods.installed, key = { it.file.name }) { entry ->
-            InstalledRow(entry, kindIcon(mods.type), onToggle = { mods.setEnabled(pack, entry, it) }, onDelete = { mods.delete(pack, entry) })
+    if (mods.installed.size > 5) {
+        SearchField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = "Фильтр по установленным…",
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    if (filtered.isEmpty() && query.isNotBlank()) {
+        Hint("Ничего не нашлось по «${query.trim()}».")
+    } else {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(filtered, key = { it.file.name }) { entry ->
+                InstalledRow(entry, kindIcon(mods.type), onToggle = { mods.setEnabled(pack, entry, it) }, onDelete = { mods.delete(pack, entry) })
+            }
         }
     }
 }
@@ -531,7 +553,7 @@ private fun Installed(model: LauncherModel, pack: Instance) {
 @Composable
 private fun InstalledRow(entry: ModEntry, glyph: ImageVector, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(22.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             RemoteIcon(entry.meta?.iconUrl, glyph, 44.dp)
             Column(Modifier.weight(1f)) {

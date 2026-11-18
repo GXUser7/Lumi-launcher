@@ -1,10 +1,12 @@
 package com.yumi.launcher.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.rounded.LocalFlorist
 import androidx.compose.material.icons.rounded.Pets
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +71,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.data.Instance
+import com.yumi.launcher.ui.theme.PopGlassAlpha
 import com.yumi.launcher.ui.theme.YumiLightColors
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassOutlineBrush
+import com.yumi.launcher.ui.theme.glassTint
 
 /** A section label above a group of controls. */
 @Composable
@@ -79,10 +86,31 @@ fun Label(text: String, modifier: Modifier = Modifier) =
 @Composable
 fun choiceColors() = MaterialTheme.colorScheme.let {
     ToggleButtonDefaults.toggleButtonColors(
-        containerColor = LocalFieldContainer.current ?: it.surfaceContainerHigh,
+        containerColor = LocalFieldContainer.current ?: glassContainer(elevated = true),
         contentColor = it.onSurface,
         checkedContainerColor = it.primary,
         checkedContentColor = it.onPrimary,
+    )
+}
+
+/** A menu matching the launcher's frosted matte popovers across both themes and all palettes. */
+@Composable
+fun GlassDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        containerColor = glassTint(PopGlassAlpha),
+        tonalElevation = 0.dp,
+        shadowElevation = 12.dp,
+        border = BorderStroke(1.dp, glassOutlineBrush()),
+        content = content,
     )
 }
 
@@ -109,11 +137,11 @@ fun <T> ChoiceGroup(
                 onCheckedChange = { onSelect(option) },
                 shapes = connectedShapes(i, options.size),
                 colors = choiceColors(),
-                contentPadding = PaddingValues(horizontal = 10.dp),
+                contentPadding = PaddingValues(horizontal = if (options.size >= 5) 4.dp else 10.dp),
                 modifier = Modifier.weight(1f).height(height).semantics { role = Role.RadioButton },
             ) {
                 leading(option)
-                Text(label(option), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                Text(label(option), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
     }

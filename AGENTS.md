@@ -80,7 +80,8 @@ export GRADLE_USER_HOME=C:/Users/000/.gradle    # тёплый кэш с арт�
 | `--menu-packs <папка>` | Собирает пак «меню игры» во всех палитрах и темах плюс отдельный пак шрифта — zip-файлы для любой игры. |
 | `--pack-test <архив.mrpack\|архив.zip> <папка> [ключ CurseForge] [--plan]` | Без окна ставит сборку из архива Modrinth или CurseForge в папку и переносит её моды на сервер, как импорт на экране «Сборки». С `--plan` (только CurseForge) ничего не качает: спрашивает CurseForge о файлах и печатает, сколько скачается в какую папку и что будет пропущено. |
 | `--content-test <папка>` | Без окна, через ту же модель, что и кнопки: категории и сортировки обоих каталогов (CurseForge — если ключ есть в настройках), установка Iris, шейдера (Iris должен переключиться на него) и ресурспака (он должен появиться в `options.txt`), выключение, удаление; вайтлист выключенного сервера для всех трёх видов входа (офлайн-uuid, поиск аккаунта на Mojang и Ely.by, несуществующий ник); архив «Отправить лог» и вырезание секретов. Своя папка лаунчера и свой узел настроек. |
-| `--scene-shot <папка> [качество…]` | Остров без окна: кадры на CPU в PNG, днём и ночью, с облёта и из кузницы, по умолчанию «Ультра» и «Высокое». Для работы над небом, облаками и туманом — окно не всплывает. Окно рисует то же на GPU. |
+| `--scene-shot <папка> [качество…] [--all-spots]` | Остров без окна: кадры на CPU в PNG, днём и ночью, с облёта и из кузницы (или всех пяти точек с `--all-spots`), по умолчанию «Ультра» и «Высокое». Для работы над небом, облаками и туманом — окно не всплывает. Окно рисует то же на GPU. |
+| `--headless-smoke <папка> [--only=подстрока,…]` | Полностью без окна через `ImageComposeScene` снимает все экраны, всплывающие панели («Уведомления», «Загрузки») и пастельные палитры в PNG без захвата фокуса и реального экрана. Свой узел настроек и папка в `.local/`. |
 
 **Долгие проверки запускай из «замороженной» копии**, а не через `gradlew run`: иначе правка кода
 во время прогона ломает перекомпиляцию, и тест падает не по своей вине.
@@ -108,6 +109,7 @@ java -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -cp "E:/Projects/YumiLauncher
 ```
 app/src/main/kotlin/com/yumi/launcher/
 ├── Main.kt              окно, тестовые режимы, смоук-съёмка
+├── HeadlessSmoke.kt     --headless-smoke (off-screen съёмка через ImageComposeScene)
 ├── LaunchTest.kt        --launch-test
 ├── ServerTest.kt        --server-test, --ping-test
 ├── SmokeServer.kt       для смоука: «Сервер Димы» на 127.0.0.1:25599, отвечает на пинг и раздаёт сборку
@@ -163,12 +165,13 @@ app/src/main/kotlin/com/yumi/launcher/
 │   ├── UltraSky.kt      небо «Ультра»: шейдеры SkSL — звёзды и Млечный Путь, облака сверху и море облаков, туман
 │   └── SceneShot.kt     --scene-shot
 └── ui/
-    ├── theme/           цвета (Glacier + пастельные палитры в OKLCH), типографика, LauncherTheme, Modifier.glass();
+    ├── theme/           цвета (Glacier + пастельные палитры в OKLCH), типографика, LauncherTheme,
+    │                    FrostBuffer & Glass (единый downscale-снимок матового стекла над 3D-фоном);
     │                    MenuPack — набор ресурсов «меню игры» (спрайты Skia 4×), MenuPanorama — его панорама
     ├── components/      общие компоненты (см. «Соглашения»)
-    ├── home/            окно (LauncherApp), навигация (LauncherState), главная, вход Ely.by и Microsoft,
+    ├── home/            окно (LauncherApp / LauncherContent), навигация (LauncherState), главная, вход Ely.by и Microsoft,
     │                    выбор папки; FoldPill — шапка сворачиваемых карточек в углах (новости, друзья);
-    │                    AccountMenu, DownloadsPanel, FeedbackCard, Guide — обучение новичка
+    │                    AccountMenu, DownloadsPanel, NotificationsPanel, FeedbackCard, Guide — обучение новичка
     ├── packs/ mods/ servers/ settings/ console/   экраны
 ```
 
@@ -410,9 +413,9 @@ app/src/main/kotlin/com/yumi/launcher/
 
 ## Git
 
-- `origin` — https://github.com/GXUser7/YumiLauncher.git, ветка `main`.
+- `origin` — https://github.com/GXUser7/Lumi-launcher.git, ветка `main` (`yumi-private` — старое зеркало YumiLauncher).
 - `.gitattributes`: `gradlew` хранится с LF, `*.bat` — с CRLF, шрифты, картинки и jar — бинарные.
-- Не коммить `.local/`, `build/`, снимки экранов и тестовые данные.
+- Не коммить `.local/`, `build/`, `dist/`, снимки экранов и тестовые данные.
 - Коммит и push — только когда владелец попросит. Сообщение коммита — по-английски: короткая
   первая строка, дальше что и зачем.
 
@@ -430,4 +433,4 @@ app/src/main/kotlin/com/yumi/launcher/
 
 ## Что ещё не сделано
 
-- Кнопка «Уведомления» в верхней панели — заглушка. Карусель новостей статична.
+- Карточки новостей на главной зашиты в код (без загрузки с сервера), но ведут в нужные разделы.

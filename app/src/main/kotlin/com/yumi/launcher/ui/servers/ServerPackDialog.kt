@@ -42,6 +42,8 @@ import com.yumi.launcher.ui.components.PackIcons
 import com.yumi.launcher.ui.home.ServerPackTarget
 import com.yumi.launcher.ui.packs.ImportProgress
 import com.yumi.launcher.ui.packs.countOf
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlin.math.absoluteValue
 
 /**
@@ -261,8 +263,9 @@ internal fun ServerPackChip(hints: ModHints?, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (shared) scheme.tertiaryContainer else scheme.surfaceContainerHigh,
+        color = if (shared) scheme.tertiaryContainer else glassContainer(elevated = true),
         contentColor = if (shared) scheme.onTertiaryContainer else scheme.onSurface,
+        border = if (shared) null else glassInnerBorder(elevated = true),
     ) {
         Row(Modifier.padding(start = 8.dp, end = 10.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Inventory2, null, Modifier.size(16.dp))

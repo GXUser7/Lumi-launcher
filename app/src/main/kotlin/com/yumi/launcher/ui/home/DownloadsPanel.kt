@@ -55,7 +55,10 @@ import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.Label
 import com.yumi.launcher.ui.components.ShapeTile
+import com.yumi.launcher.ui.theme.PopGlassAlpha
 import com.yumi.launcher.ui.theme.glass
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -65,14 +68,21 @@ import java.time.format.DateTimeFormatter
  * what is downloading — with how far along and a way to stop it — and what has finished.
  */
 @Composable
-fun DownloadsButton(model: LauncherModel, modifier: Modifier = Modifier) {
-    var open by remember { mutableStateOf(false) }
+fun DownloadsButton(
+    model: LauncherModel,
+    modifier: Modifier = Modifier,
+    open: Boolean? = null,
+    onOpenChange: ((Boolean) -> Unit)? = null,
+) {
+    var localOpen by remember { mutableStateOf(false) }
+    val isOpen = open ?: localOpen
+    val setOpen: (Boolean) -> Unit = onOpenChange ?: { localOpen = it }
     val active = model.downloads.active
     Box(modifier) {
         IconButton(
-            onClick = { open = !open },
+            onClick = { setOpen(!isOpen) },
             modifier = Modifier.size(44.dp),
-            colors = if (open) IconButtonDefaults.filledIconButtonColors() else IconButtonDefaults.iconButtonColors(),
+            colors = if (isOpen) IconButtonDefaults.filledIconButtonColors() else IconButtonDefaults.iconButtonColors(),
         ) {
             BadgedBox(badge = { if (active.isNotEmpty()) Badge { Text(active.size.toString()) } }) {
                 AnimatedContent(active.isNotEmpty()) { busy ->
@@ -80,12 +90,12 @@ fun DownloadsButton(model: LauncherModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        if (open) {
+        if (isOpen) {
             val below = with(LocalDensity.current) { 56.dp.roundToPx() }
             Popup(
                 alignment = Alignment.TopEnd,
                 offset = IntOffset(0, below),
-                onDismissRequest = { open = false },
+                onDismissRequest = { setOpen(false) },
                 properties = PopupProperties(focusable = true),
             ) {
                 DownloadsPanel(model, active)
@@ -98,7 +108,7 @@ fun DownloadsButton(model: LauncherModel, modifier: Modifier = Modifier) {
 private fun DownloadsPanel(model: LauncherModel, active: List<ActiveDownload>) {
     val downloads = model.downloads
     Column(
-        Modifier.width(400.dp).glass(RoundedCornerShape(30.dp)).padding(18.dp),
+        Modifier.width(400.dp).glass(RoundedCornerShape(30.dp), alpha = PopGlassAlpha, elevation = 20.dp).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -130,7 +140,12 @@ private fun DownloadsPanel(model: LauncherModel, active: List<ActiveDownload>) {
 @Composable
 private fun ActiveRow(item: ActiveDownload) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = glassContainer(elevated = true),
+        border = glassInnerBorder(elevated = true),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Column(Modifier.padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ShapeTile(glyph(item.kind), scheme.primaryContainer, scheme.onPrimaryContainer, 36.dp)

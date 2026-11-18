@@ -58,6 +58,7 @@ import com.yumi.launcher.ui.components.PackTile
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.connectedShapes
 import com.yumi.launcher.ui.components.tileColor
+import com.yumi.launcher.ui.theme.glassContainer
 
 /** The part of a pack's tile the picker is changing. */
 private enum class TilePart(val label: String, val icon: ImageVector) {
@@ -167,8 +168,7 @@ internal fun TilePicker(tile: TileDraft) {
 /** The tile as it stands, large. */
 @Composable
 private fun Preview(tile: TileDraft, size: Dp) {
-    val scheme = MaterialTheme.colorScheme
-    Box(Modifier.size(size + 16.dp).clip(RoundedCornerShape(28.dp)).background(scheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size + 16.dp).clip(RoundedCornerShape(28.dp)).background(glassContainer(elevated = true)), contentAlignment = Alignment.Center) {
         if (tile.usePicture && tile.picture != null) {
             PackTile(Instance(id = "", name = "", version = "", icon = tile.icon, iconUrl = tile.picture, iconShape = tile.shape), size)
         } else {
@@ -185,7 +185,7 @@ private fun Preview(tile: TileDraft, size: Dp) {
 private fun Option(picked: Boolean, label: String, onPick: () -> Unit, tile: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val corner by animateDpAsState(if (picked) 16.dp else 26.dp, spring(dampingRatio = 0.55f, stiffness = 600f))
-    val backing by animateColorAsState(if (picked) scheme.primary else scheme.surfaceContainer, tween(160))
+    val backing by animateColorAsState(if (picked) scheme.primary else glassContainer(), tween(160))
     Surface(
         onClick = onPick,
         shape = RoundedCornerShape(corner),

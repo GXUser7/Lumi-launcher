@@ -2,6 +2,7 @@ package com.yumi.launcher.scene
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -16,10 +17,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.skiaCanvas
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import com.yumi.launcher.settings.SceneMotion
 import com.yumi.launcher.settings.SceneQuality
+import com.yumi.launcher.ui.theme.BackdropGlassState
+import com.yumi.launcher.ui.theme.FrostBlur
+import com.yumi.launcher.ui.theme.FrostBuffer
+import com.yumi.launcher.ui.theme.shrinkForFrost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.FilterMipmap
@@ -32,12 +40,14 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
@@ -65,6 +75,8 @@ class SceneOptions(val quality: SceneQuality, val motion: SceneMotion, val fps: 
  * [night] follows the theme: the island turns to its night look over about a second. [spot] is the
  * place the camera flies to: the whole island, or the part of it the open section is about.
  */
+internal val sharedIslandScene by lazy { islandScene() }
+
 @Composable
 fun VoxelBackground(
     parallax: Parallax,
@@ -75,9 +87,17 @@ fun VoxelBackground(
     running: Boolean = true,
     /** False on a software renderer: the Ultra sky's shaders would run on the CPU there, a frame a second. */
     shaders: Boolean = true,
+    backdrop: BackdropGlassState? = null,
 ) {
     val renderer by produceState<VoxelRenderer?>(null) {
-        value = withContext(Dispatchers.Default) { VoxelRenderer(islandScene()) }
+        value = withContext(Dispatchers.Default) { VoxelRenderer(sharedIslandScene) }
+    }
+    val currentRenderer = renderer
+    DisposableEffect(currentRenderer) {
+        onDispose { currentRenderer?.close() }
+    }
+    DisposableEffect(backdrop) {
+        onDispose { backdrop?.clear() }
     }
     val clock = remember { mutableLongStateOf(0L) }
     LaunchedEffect(running, options.fps) {
@@ -96,7 +116,7 @@ fun VoxelBackground(
             r.options = options
             r.spot = spot
             r.shaders = shaders
-            r.draw(this, millis, parallax)
+            r.draw(this, millis, parallax, backdrop)
         }
     }
 }
@@ -194,7 +214,23 @@ internal class VoxelRenderer(private val scene: Scene) {
     /** Flicker of each light source this frame, by its index in the world. */
     private val flicker = FloatArray(world.lights.size)
 
-    fun draw(scope: DrawScope, millis: Long, parallax: Parallax) = with(scope) {
+    private val frostBuffer = FrostBuffer(retainedFrames = 4)
+    private var lastIslandCount = 0
+    private var lastFrostMillis = Long.MIN_VALUE
+    private var lastFrostW = 0f
+    private var lastFrostH = 0f
+    private var lastFrostBlend = -1f
+    private var lastFrostSpot: SceneSpot? = null
+    private var lastFrostQuality: SceneQuality? = null
+
+    fun close() {
+        frostBuffer.close()
+        textured.close()
+        flatPaint.close()
+        additive.close()
+    }
+
+    fun draw(scope: DrawScope, millis: Long, parallax: Parallax, backdrop: BackdropGlassState? = null) = with(scope) {
         if (origin < 0) { origin = millis; last = millis }
         val t = (millis - origin) / 1000f
         now = t
@@ -247,6 +283,9 @@ internal class VoxelRenderer(private val scene: Scene) {
             drawClouds(t, w, h, quality)
             drawIsland(t, w, h, quality)
         }
+        if (backdrop != null && w > 0f && h > 0f) {
+            updateFrost(this, millis, t, w, h, quality, backdrop)
+        }
         if (quality == SceneQuality.Ultra) drawGlints(t)
         if (quality >= SceneQuality.High) drawGlows(t, quality)
         if (quality >= SceneQuality.Medium) drawParticles(t, dt, quality)
@@ -255,6 +294,70 @@ internal class VoxelRenderer(private val scene: Scene) {
             drawFlare(quality)
             drawVignette()
         }
+    }
+
+    /**
+     * Records a downscaled blurred snapshot of the current sky + already-projected island faces
+     * into [FrostBuffer]. Runs at most ~30 Hz during transitions/orbit and costs zero extra
+     * geometry projection or SkSL shader passes.
+     */
+    private fun updateFrost(
+        scope: DrawScope,
+        millis: Long,
+        t: Float,
+        w: Float,
+        h: Float,
+        quality: SceneQuality,
+        backdrop: BackdropGlassState,
+    ) {
+        val viewport = IntSize(w.roundToInt(), h.roundToInt())
+        if (backdrop.viewport != viewport) backdrop.viewport = viewport
+        val sizeChanged = w != lastFrostW || h != lastFrostH
+        val stateChanged = abs(blend - lastFrostBlend) > 0.015f || spot != lastFrostSpot || quality != lastFrostQuality
+        val minInterval = if (flight < 1f || scene.spots.getValue(spot).orbit || abs(night - blend) > 0.005f) 32L else 80L
+        if (backdrop.frost != null && !sizeChanged && !stateChanged && millis - lastFrostMillis < minInterval) return
+
+        val blurPx = FrostBlur.value * scope.density
+        val shrink = shrinkForFrost(blurPx)
+        val small = IntSize(
+            ceil(w / shrink).toInt().coerceAtLeast(1),
+            ceil(h / shrink).toInt().coerceAtLeast(1),
+        )
+        frostBuffer.prepare(small, blurPx / shrink)
+        val image = frostBuffer.record(scope, LayoutDirection.Ltr, Size(w, h), shrink) {
+            drawSky(h)
+            drawFrostCloudSea(w, h)
+            if (quality == SceneQuality.Ultra) drawAurora(t)
+            drawLights(t, h, SceneQuality.Medium)
+            if (quality == SceneQuality.Ultra) drawHaze(h)
+            replayIsland(lastIslandCount, textures = quality >= SceneQuality.Medium, animated = quality >= SceneQuality.Medium, t = t)
+            if (quality >= SceneQuality.High) drawGlows(t, quality)
+        }
+        backdrop.publish(image)
+        lastFrostMillis = millis
+        lastFrostW = w
+        lastFrostH = h
+        lastFrostBlend = blend
+        lastFrostSpot = spot
+        lastFrostQuality = quality
+    }
+
+    private fun DrawScope.drawFrostCloudSea(w: Float, h: Float) {
+        val seaTop = lerp(Color(0xFFDCEAFB), Color(0xFF1D2C44), blend)
+        val seaBottom = lerp(Color(0xFFA9C3E3), Color(0xFF10192A), blend)
+        val topY = (horizonY - h * 0.02f).coerceIn(0f, h)
+        if (topY >= h) return
+        drawRect(
+            Brush.verticalGradient(
+                0f to seaTop.copy(alpha = 0f),
+                0.18f to seaTop.copy(alpha = 0.85f),
+                1f to seaBottom,
+                startY = topY,
+                endY = h,
+            ),
+            topLeft = Offset(0f, topY),
+            size = Size(w, h - topY),
+        )
     }
 
     // ---------- camera ----------
@@ -786,7 +889,21 @@ internal class VoxelRenderer(private val scene: Scene) {
             val dist = distance(f.cx, f.cy + bob, f.cz)
             keys[count++] = ((0x7FFF - steps.coerceAtMost(0x7FFF)).toLong() shl 48) or ((0xFFFF - (dist * 64).toInt().coerceIn(0, 0xFFFF)).toLong() shl 32) or i.toLong()
         }
+        lastIslandCount = count
         emitSorted(faces, count, textures = textures, animated = animated, t = t)
+    }
+
+    /** Replays already-projected and sorted island faces without re-sorting or re-projecting. */
+    private fun DrawScope.replayIsland(count: Int, textures: Boolean, animated: Boolean, t: Float) {
+        val canvas = drawContext.canvas.skiaCanvas
+        triangles = 0
+        for (k in 0 until count) {
+            val i = (keys[k] and 0xFFFFFFFFL).toInt()
+            val f = faces[i]
+            val scroll = if (animated) scrollOf(f.anim, t) else 0f
+            emitFace(canvas, f, i, textures, scroll)
+        }
+        flush(canvas, textures)
     }
 
     /**

@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.ui.components.Tip
+import com.yumi.launcher.ui.theme.GlassAlpha
 import com.yumi.launcher.ui.theme.glass
+import com.yumi.launcher.ui.theme.glassContainer
 
 /**
  * The header of a corner card that folds away — the news, the friends. One pill, and all of it is
@@ -53,7 +55,7 @@ internal fun FoldPill(
             onClick = { onHiddenChange(!hidden) },
             shape = CircleShape,
             color = Color.Transparent,
-            modifier = modifier.glass(CircleShape),
+            modifier = modifier.glass(CircleShape, alpha = GlassAlpha),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AnimatedContent(
@@ -73,7 +75,7 @@ internal fun FoldPill(
                 val up = hidden == opensUp
                 val turn by animateFloatAsState(if (up) 180f else 0f, spring(dampingRatio = 0.7f, stiffness = 300f))
                 Box(
-                    Modifier.padding(start = 10.dp, end = 6.dp).size(32.dp).background(scheme.surfaceContainerHighest, CircleShape),
+                    Modifier.padding(start = 10.dp, end = 6.dp).size(32.dp).background(glassContainer(elevated = true), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Rounded.KeyboardArrowDown, null, Modifier.size(20.dp).rotate(turn)) }
             }

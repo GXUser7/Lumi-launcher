@@ -61,6 +61,8 @@ import com.yumi.launcher.ui.components.ModalCard
 import com.yumi.launcher.ui.components.SearchField
 import com.yumi.launcher.ui.components.LocalFieldContainer
 import com.yumi.launcher.ui.components.ShapeTile
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image as SkiaImage
@@ -177,13 +179,13 @@ private fun WorldCard(world: SavedWorld, picked: Boolean, twin: Boolean, enabled
 @Composable
 private fun Choice(picked: Boolean, enabled: Boolean, onClick: () -> Unit, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val tone by animateColorAsState(if (picked) scheme.secondaryContainer else LocalFieldContainer.current ?: scheme.surfaceContainerHigh, tween(160))
+    val tone by animateColorAsState(if (picked) scheme.secondaryContainer else LocalFieldContainer.current ?: glassContainer(elevated = true), tween(160))
     Surface(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(20.dp),
         color = tone,
-        border = if (picked) BorderStroke(2.dp, scheme.primary) else null,
+        border = if (picked) BorderStroke(2.dp, scheme.primary) else glassInnerBorder(),
         modifier = Modifier.fillMaxWidth().semantics {
             role = Role.RadioButton
             selected = picked

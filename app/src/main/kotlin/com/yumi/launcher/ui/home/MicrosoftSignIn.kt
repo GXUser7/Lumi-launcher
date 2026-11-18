@@ -42,14 +42,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yumi.launcher.core.MicrosoftCode
+import com.yumi.launcher.core.Support
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.ui.components.ModalCard
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.delay
-import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
-import java.net.URI
 
 /**
  * Signing in with Microsoft: a code from Microsoft, confirmed on Microsoft's own page in the
@@ -107,7 +108,7 @@ fun MicrosoftSignIn(model: LauncherModel, onClose: () -> Unit) {
                     onClick = {
                         code ?: return@Button
                         copy(code.userCode)
-                        runCatching { Desktop.getDesktop().browse(URI(code.link)) }
+                        Support.open(code.link)
                     },
                     enabled = code != null && microsoft.step == null,
                     shapes = ButtonDefaults.shapes(),
@@ -132,7 +133,7 @@ private fun CodePlate(code: MicrosoftCode?, failed: Boolean) {
             copied = false
         }
     }
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().height(84.dp)) {
+    Surface(shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth().height(84.dp)) {
         Row(Modifier.padding(start = 22.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Код входа", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)

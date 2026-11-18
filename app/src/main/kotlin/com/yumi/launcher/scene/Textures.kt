@@ -106,6 +106,8 @@ internal object Tile {
     const val CAULDRON = 77
     const val LECTERN = 78
     const val SPRUCE_PLANKS = 79
+    const val SPRUCE_LEAVES = 80
+    const val VERDIGRIS_COPPER = 81
 
     // Two tiles tall each: the pattern is painted twice, one above the other, and scrolls.
     const val WATER = 96
@@ -299,7 +301,21 @@ private class Painter(val px: IntArray, val stride: Int) {
         planks(Tile.SPRUCE_PLANKS, intArrayOf(rgb(0x6E5132), rgb(0x7A5A38), rgb(0x654A2E), rgb(0x735536)), rgb(0x4E3822))
         tile(Tile.OAK_LEAVES) { noisy(leaves, cell = 2, grain = 0.7f); speckle(intArrayOf(rgb(0x1F4A16)), 0.1f) }
         tile(Tile.BIRCH_LEAVES) { noisy(intArrayOf(rgb(0x5E8A3A), rgb(0x6A9A42), rgb(0x78A84C), rgb(0x86B556)), cell = 2, grain = 0.7f); speckle(intArrayOf(rgb(0x4A7230)), 0.1f) }
+        tile(Tile.SPRUCE_LEAVES) {
+            noisy(intArrayOf(rgb(0x193B22), rgb(0x214C2C), rgb(0x2A5B36), rgb(0x336A40)), cell = 2, grain = 0.7f)
+            speckle(intArrayOf(rgb(0x122B18), rgb(0x3D784A)), 0.08f)
+        }
         tile(Tile.CHERRY_LEAVES) { noisy(cherry, cell = 2, grain = 0.75f); speckle(intArrayOf(rgb(0xFFE4EF), rgb(0xD06E9C)), 0.08f) }
+        tile(Tile.VERDIGRIS_COPPER) {
+            val copper = intArrayOf(rgb(0x398B7C), rgb(0x449B8A), rgb(0x50AA97), rgb(0x327B6D))
+            val seam = rgb(0x266156)
+            for (y in 0 until 16) for (x in 0 until 16) {
+                val row = y / 4
+                val offset = if (row % 2 == 0) 0 else 4
+                this[x, y] = if (y % 4 == 3 || (x + offset) % 8 == 7) seam
+                else shade(copper[(hash((x + offset) / 8, row, 19) * copper.size).toInt().coerceAtMost(copper.size - 1)], 0.92f + r() * 0.16f)
+            }
+        }
         tile(Tile.BIRCH_LOG) {
             each { _, _ -> if (r() < 0.9f) rgb(0xD9D5CC) else rgb(0xC8C4BA) }
             repeat(6) {

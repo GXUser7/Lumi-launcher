@@ -44,12 +44,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.ElyBy
+import com.yumi.launcher.core.Support
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.settings.AccountKind
 import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.ModalCard
-import java.awt.Desktop
-import java.net.URI
 
 /**
  * Signing in to Ely.by: login and password, then the authenticator code if the account asks for
@@ -136,7 +135,7 @@ fun ElySignIn(model: LauncherModel, onClose: () -> Unit) {
         }
         ely.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.error) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(ElyBy.REGISTER_URL)) } }) { Text("Регистрация") }
+            TextButton(onClick = { Support.open(ElyBy.REGISTER_URL) }) { Text("Регистрация") }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = close, enabled = !ely.busy) { Text("Отмена") }
             Button(onClick = submit, enabled = !ely.busy && login.isNotBlank() && password.isNotEmpty(), shapes = ButtonDefaults.shapes()) {

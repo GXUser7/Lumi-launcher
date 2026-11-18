@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassFieldContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 
 /**
  * A titled part of a long form on a tonal card: a cookie tile with the part's glyph, a title, and
@@ -48,8 +51,13 @@ fun FormSection(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(28.dp), color = scheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
-        CompositionLocalProvider(LocalFieldContainer provides scheme.surfaceContainerHighest) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = glassContainer(elevated = false),
+        border = glassInnerBorder(elevated = false),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        CompositionLocalProvider(LocalFieldContainer provides glassFieldContainer()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ShapeTile(icon, scheme.primaryContainer, scheme.onPrimaryContainer, 36.dp)
@@ -104,7 +112,7 @@ fun InfoChip(
     text: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    container: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    container: Color = glassContainer(elevated = true),
     content: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Surface(shape = CircleShape, color = container, contentColor = content, modifier = modifier) {

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.Http
 import com.yumi.launcher.core.LauncherPaths
+import com.yumi.launcher.ui.theme.glassContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image
@@ -39,7 +40,7 @@ fun RemoteIcon(url: String?, fallback: ImageVector, size: Dp, modifier: Modifier
     val image = rememberRemoteImage(url)
     val scheme = MaterialTheme.colorScheme
     Box(
-        modifier.size(size).clip(RoundedCornerShape(size * 0.28f)).background(scheme.surfaceContainerHighest),
+        modifier.size(size).clip(RoundedCornerShape(size * 0.28f)).background(glassContainer(elevated = true)),
         contentAlignment = Alignment.Center,
     ) {
         val bitmap = image
@@ -52,7 +53,7 @@ fun RemoteIcon(url: String?, fallback: ImageVector, size: Dp, modifier: Modifier
 @Composable
 fun RemoteImage(url: String, modifier: Modifier = Modifier) {
     val image = rememberRemoteImage(url)
-    Box(modifier.clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+    Box(modifier.clip(RoundedCornerShape(18.dp)).background(glassContainer(elevated = true))) {
         image?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     }
 }

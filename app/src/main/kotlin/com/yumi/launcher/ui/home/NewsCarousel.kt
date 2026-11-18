@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.ui.theme.glass
+import com.yumi.launcher.ui.theme.isLightTheme
 
 private class NewsItem(val tag: String, val title: String, val icon: ImageVector, val container: Color, val content: Color)
 
@@ -53,7 +55,14 @@ private val Widths = listOf(360.dp, 180.dp, 84.dp)
  * choice is kept between launches.
  */
 @Composable
-fun NewsCarousel(selected: Int, onSelect: (Int) -> Unit, hidden: Boolean, onHiddenChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun NewsCarousel(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    hidden: Boolean,
+    onHiddenChange: (Boolean) -> Unit,
+    onAction: (Int) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
     val items = listOf(
         NewsItem("Лаунчер", "Каталог модов прямо в лаунчере", Icons.Rounded.Extension, scheme.primary, scheme.onPrimary),
@@ -84,23 +93,27 @@ fun NewsCarousel(selected: Int, onSelect: (Int) -> Unit, hidden: Boolean, onHidd
             !hidden,
             enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 300f), expandFrom = Alignment.Top) + fadeIn(tween(250, delayMillis = 80)),
             exit = shrinkVertically(tween(260), shrinkTowards = Alignment.Top) + fadeOut(tween(160)),
-        ) { Cards(items, selected, onSelect) }
+        ) { Cards(items, selected, onSelect, onAction) }
     }
 }
 
 @Composable
-private fun Cards(items: List<NewsItem>, selected: Int, onSelect: (Int) -> Unit) {
+private fun Cards(items: List<NewsItem>, selected: Int, onSelect: (Int) -> Unit, onAction: (Int) -> Unit) {
+    val light = isLightTheme()
     Row(Modifier.padding(top = 10.dp).height(200.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEachIndexed { i, item ->
             val rank = (i - selected + items.size) % items.size
             val width by animateDpAsState(Widths[rank], spring(dampingRatio = 0.72f, stiffness = 260f))
+            val shape = RoundedCornerShape(28.dp)
             Surface(
-                onClick = { onSelect(i) },
-                shape = RoundedCornerShape(28.dp),
-                color = item.container,
+                onClick = { if (rank == 0) onAction(i) else onSelect(i) },
+                shape = shape,
+                color = Color.Transparent,
                 contentColor = item.content,
-                shadowElevation = 6.dp,
-                modifier = Modifier.width(width).fillMaxHeight(),
+                modifier = Modifier
+                    .width(width)
+                    .fillMaxHeight()
+                    .glass(shape, tint = item.container.copy(alpha = if (light) 0.88f else 0.78f), elevation = 10.dp),
             ) {
                 NewsCard(item, hero = rank == 0)
             }
@@ -120,7 +133,7 @@ private fun NewsCard(item: NewsItem, hero: Boolean) {
             exit = fadeOut(tween(100)),
         ) {
             Column(Modifier.width(316.dp)) {
-                Text(item.tag.uppercase(), style = MaterialTheme.typography.labelSmall)
+                Text("${item.tag.uppercase()} · ОТКРЫТЬ →", style = MaterialTheme.typography.labelSmall)
                 Spacer(Modifier.height(6.dp))
                 Text(item.title, style = MaterialTheme.typography.headlineSmall)
             }

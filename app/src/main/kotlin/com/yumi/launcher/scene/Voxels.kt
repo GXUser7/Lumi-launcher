@@ -109,6 +109,7 @@ internal enum class Block(
     BirchLog(Tile.BIRCH_LOG, shape = Shape.Log),
     Leaves(Tile.OAK_LEAVES, anim = Anim.Leaves, merges = true, dims = 1),
     BirchLeaves(Tile.BIRCH_LEAVES, anim = Anim.Leaves, merges = true, dims = 1),
+    SpruceLeaves(Tile.SPRUCE_LEAVES, anim = Anim.Leaves, merges = true, dims = 1),
     Cherry(Tile.CHERRY_LEAVES, anim = Anim.Leaves, merges = true, dims = 1),
     Water(Tile.WATER, alpha = 0.72f, anim = Anim.Water, merges = true, dims = 2),
     Fall(Tile.WATER_FLOW, alpha = 0.78f, anim = Anim.Fall, merges = true, dims = 2),
@@ -162,10 +163,14 @@ internal enum class Block(
     CherrySlab(Tile.CHERRY_PLANKS, shape = Shape.Slab),
     SpruceSlab(Tile.SPRUCE_PLANKS, shape = Shape.Slab),
     BrickSlab(Tile.STONE_BRICKS, shape = Shape.Slab),
+    CopperSlab(Tile.VERDIGRIS_COPPER, shape = Shape.Slab),
     CobbleStairs(Tile.COBBLE, shape = Shape.Stairs),
+    OakStairs(Tile.OAK_PLANKS, shape = Shape.Stairs),
     SpruceStairs(Tile.SPRUCE_PLANKS, shape = Shape.Stairs),
     CherryStairs(Tile.CHERRY_PLANKS, shape = Shape.Stairs),
     BrickStairs(Tile.STONE_BRICKS, shape = Shape.Stairs),
+    CopperStairs(Tile.VERDIGRIS_COPPER, shape = Shape.Stairs),
+    CopperBlock(Tile.VERDIGRIS_COPPER),
     Cloud(Tile.CLOUD, alpha = 0.9f, emit = 0.55f, merges = true);
 
     val top = top

@@ -65,7 +65,10 @@ import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.packs.GameVersionFilter
 import com.yumi.launcher.ui.packs.PackSearch
 import com.yumi.launcher.ui.packs.PopularVersions
+import com.yumi.launcher.ui.theme.GlassAlpha
 import com.yumi.launcher.ui.theme.glass
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 
 /**
  * A catalogue on screen that wants the filters beside its card: the mods screen's list — mods,
@@ -89,7 +92,7 @@ val FILTERS_GAP = 12.dp
 @Composable
 fun FiltersPanel(model: LauncherModel, state: LauncherState, panel: FilterPanel, modifier: Modifier = Modifier) {
     Column(
-        modifier.width(FILTERS_WIDTH).fillMaxHeight().glass(RoundedCornerShape(36.dp)).padding(18.dp),
+        modifier.width(FILTERS_WIDTH).fillMaxHeight().glass(RoundedCornerShape(36.dp), alpha = GlassAlpha).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (panel.modpacks) PackFilters(model, state.packSearch) else ContentFilters(model, panel.version)
@@ -199,7 +202,7 @@ private fun CategoryGroups(categories: List<Category>?, filter: SearchFilter, mi
 @Composable
 private fun Group(title: String, icon: ImageVector, picked: String? = null, content: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, Modifier.size(18.dp), tint = scheme.primary)

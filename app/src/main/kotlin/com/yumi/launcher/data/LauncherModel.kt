@@ -56,17 +56,7 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
         private set
     private var afterFolder: (() -> Unit)? = null
 
-    val mods = ModManager(this, scope)
-    val servers = ServerManager(this, scope)
-    val quickJoin = QuickJoinList(scope)
-    val ely = ElyAccount(settings, scope) { uuid -> accounts.beforeSignIn(AccountKind.ElyBy, uuid) }
-    val microsoft = MicrosoftAccount(settings, scope) { uuid -> accounts.beforeSignIn(AccountKind.Microsoft, uuid) }
-    val accounts = Accounts(this, scope)
-    val packImports = PackImporter(this, scope)
-    val friends = FriendsModel(this, scope)
-    val feedback = Feedback(this, scope)
-    val downloads = Downloads(this)
-
+    // Declared before sub-models whose init coroutines read status/gameServer eagerly under FlushCoroutineDispatcher.
     var manifest by mutableStateOf<VersionManifest?>(null)
         private set
     var manifestError by mutableStateOf<String?>(null)
@@ -90,6 +80,17 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val log = mutableStateListOf<String>()
     var logFile by mutableStateOf<File?>(null)
         private set
+
+    val mods = ModManager(this, scope)
+    val servers = ServerManager(this, scope)
+    val quickJoin = QuickJoinList(scope)
+    val ely = ElyAccount(settings, scope) { uuid -> accounts.beforeSignIn(AccountKind.ElyBy, uuid) }
+    val microsoft = MicrosoftAccount(settings, scope) { uuid -> accounts.beforeSignIn(AccountKind.Microsoft, uuid) }
+    val accounts = Accounts(this, scope)
+    val packImports = PackImporter(this, scope)
+    val friends = FriendsModel(this, scope)
+    val feedback = Feedback(this, scope)
+    val downloads = Downloads(this)
 
     private var process: Process? = null
     private var job: Job? = null

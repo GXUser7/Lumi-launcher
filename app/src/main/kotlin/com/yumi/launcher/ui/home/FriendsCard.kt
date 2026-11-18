@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.outlined.PersonRemove
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -36,9 +37,9 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,10 +67,12 @@ import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PackCheck
 import com.yumi.launcher.ui.components.Field
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.SkinHead
 import com.yumi.launcher.ui.components.Tip
 import com.yumi.launcher.ui.servers.Online
+import com.yumi.launcher.ui.theme.GlassAlpha
 import com.yumi.launcher.ui.theme.glass
 
 /**
@@ -84,6 +87,7 @@ internal fun FriendsCard(
     onHiddenChange: (Boolean) -> Unit,
     onJoin: (Instance?, String) -> Unit,
     onServerPack: (ServerPackTarget) -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val friends = model.friends
@@ -108,13 +112,18 @@ internal fun FriendsCard(
             exit = shrinkVertically(tween(260), shrinkTowards = Alignment.Top) + fadeOut(tween(160)),
         ) {
             Column(
-                Modifier.padding(top = 10.dp).fillMaxWidth().glass(RoundedCornerShape(28.dp)).padding(16.dp),
+                Modifier.padding(top = 10.dp).fillMaxWidth().glass(RoundedCornerShape(28.dp), alpha = GlassAlpha).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 when {
                     !friends.available -> {
                         Text("Друзья появятся, когда вы подключите сервер друзей.", style = MaterialTheme.typography.bodyMedium)
                         Hint("Поднимите свой сервер (например, на Amvera) и впишите его адрес в «Настройках» → «Друзья». Друзьям нужен тот же адрес.")
+                        FilledTonalButton(onClick = onOpenSettings, shapes = ButtonDefaults.shapes()) {
+                            Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Открыть настройки")
+                        }
                     }
                     !friends.signedIn -> SignUp(model)
                     else -> FriendsList(model, onJoin, onServerPack)
@@ -316,7 +325,7 @@ private fun FriendRow(model: LauncherModel, friend: Friend, onJoin: (Instance?, 
         }
         Box {
             IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.MoreVert, "Ещё", Modifier.size(18.dp)) }
-            DropdownMenu(menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(16.dp)) {
+            GlassDropdownMenu(menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
                     text = { Text("Удалить из друзей") },
                     leadingIcon = { Icon(Icons.Outlined.PersonRemove, null) },

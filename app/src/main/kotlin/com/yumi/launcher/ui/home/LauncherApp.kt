@@ -2,15 +2,15 @@ package com.yumi.launcher.ui.home
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,20 +30,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Feedback
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,21 +57,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import org.jetbrains.skiko.GraphicsApi
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.WindowState
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
-import com.yumi.launcher.data.active
 import com.yumi.launcher.data.PlayStatus
+import com.yumi.launcher.data.active
 import com.yumi.launcher.scene.Parallax
 import com.yumi.launcher.scene.SceneOptions
 import com.yumi.launcher.scene.VoxelBackground
@@ -84,11 +83,13 @@ import com.yumi.launcher.settings.AfterLaunch
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.settings.SceneMotion
 import com.yumi.launcher.ui.components.Avatar
-import com.yumi.launcher.ui.components.ModalCard
-import com.yumi.launcher.ui.components.SkinHead
-import com.yumi.launcher.ui.components.ResizeEdges
-import com.yumi.launcher.ui.components.WindowControls
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.components.LumiMark
+import com.yumi.launcher.ui.components.ModalCard
+import com.yumi.launcher.ui.components.ResizeEdges
+import com.yumi.launcher.ui.components.SkinHead
+import com.yumi.launcher.ui.components.Tip
+import com.yumi.launcher.ui.components.WindowControls
 import com.yumi.launcher.ui.components.connectedShapes
 import com.yumi.launcher.ui.console.ConsoleScreen
 import com.yumi.launcher.ui.mods.ModsScreen
@@ -96,11 +97,19 @@ import com.yumi.launcher.ui.packs.PacksScreen
 import com.yumi.launcher.ui.servers.ServerPackDialog
 import com.yumi.launcher.ui.servers.ServersScreen
 import com.yumi.launcher.ui.settings.SettingsScreen
+import com.yumi.launcher.ui.theme.BackdropGlassState
+import com.yumi.launcher.ui.theme.CardGlassAlpha
+import com.yumi.launcher.ui.theme.GlassAlpha
+import com.yumi.launcher.ui.theme.LocalBackdropGlass
+import com.yumi.launcher.ui.theme.LocalInGlass
 import com.yumi.launcher.ui.theme.glass
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.jetbrains.skiko.GraphicsApi
 
 /**
- * The whole window: the island scene underneath, a floating top bar, the card on the left that
- * every screen lives in, and the news carousel in the corner the island leaves free.
+ * Windowed entry point: wires AWT/Swing window dragging, caption controls, edge resizing, and
+ * hardware-shader capability into [LauncherContent].
  */
 @Composable
 fun FrameWindowScope.LauncherApp(
@@ -112,14 +121,55 @@ fun FrameWindowScope.LauncherApp(
     /** Hands the navigation state and the model out once — for the smoke run, which drives them screen by screen. */
     onState: (LauncherState, LauncherModel) -> Unit = { _, _ -> },
 ) {
+    LauncherContent(
+        settings = settings,
+        dark = dark,
+        minimized = windowState.isMinimized,
+        shaders = window.renderApi != GraphicsApi.SOFTWARE_FAST && window.renderApi != GraphicsApi.SOFTWARE_COMPAT,
+        onMinimizeWindow = { windowState.isMinimized = true },
+        onRestoreWindow = {
+            windowState.isMinimized = false
+            window.toFront()
+        },
+        onClose = onClose,
+        closeRequests = closeRequests,
+        dragArea = { WindowDraggableArea(Modifier.fillMaxWidth().height(88.dp)) { Box(Modifier.fillMaxSize()) } },
+        windowControls = { WindowControls(windowState, it) },
+        resizeEdges = { ResizeEdges(windowState) },
+        onState = onState,
+    )
+}
+
+/**
+ * Pure Compose root used by both the desktop [Window] and the headless screenshot harness.
+ * Renders the 3D island, records its single blurred [BackdropGlassState], and floats all matte
+ * glass UI panels above it.
+ */
+@Composable
+fun LauncherContent(
+    settings: LauncherSettings,
+    dark: Boolean,
+    minimized: Boolean = false,
+    shaders: Boolean = true,
+    onMinimizeWindow: () -> Unit = {},
+    onRestoreWindow: () -> Unit = {},
+    onClose: () -> Unit = {},
+    closeRequests: Int = 0,
+    dragArea: @Composable () -> Unit = {},
+    windowControls: @Composable (onClose: () -> Unit) -> Unit = {},
+    resizeEdges: @Composable () -> Unit = {},
+    startGuide: Boolean = true,
+    onState: (LauncherState, LauncherModel) -> Unit = { _, _ -> },
+) {
     val scope = rememberCoroutineScope()
     val model = remember { LauncherModel(settings, scope) }
     val state = remember { LauncherState().also { onState(it, model) } }
     val parallax = remember { Parallax() }
+    val backdrop = remember { BackdropGlassState() }
 
     // The first launch shows the newcomer around, once the island is up behind the guide.
-    LaunchedEffect(Unit) {
-        if (!settings.guideDone) {
+    LaunchedEffect(startGuide) {
+        if (startGuide && !settings.guideDone) {
             delay(1200)
             state.guide.start(state)
         }
@@ -133,7 +183,7 @@ fun FrameWindowScope.LauncherApp(
     // Only a minimise the launcher did itself is undone when the game closes.
     var minimizedForGame by remember { mutableStateOf(false) }
     val minimize = {
-        windowState.isMinimized = true
+        onMinimizeWindow()
         minimizedForGame = true
     }
     val play: (Instance?, String?) -> Unit = { pack, join ->
@@ -150,8 +200,7 @@ fun FrameWindowScope.LauncherApp(
             },
             onExit = {
                 if (minimizedForGame) {
-                    windowState.isMinimized = false
-                    window.toFront()
+                    onRestoreWindow()
                     minimizedForGame = false
                 }
             },
@@ -160,6 +209,34 @@ fun FrameWindowScope.LauncherApp(
 
     Box(
         Modifier.fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (event.isCtrlPressed) {
+                    when (event.key) {
+                        Key.One -> { state.section = Section.Home; true }
+                        Key.Two -> { state.section = Section.Mods; true }
+                        Key.Three -> { state.section = Section.Packs; true }
+                        Key.Four -> { state.section = Section.Servers; true }
+                        Key.Comma -> { state.section = Section.Settings; true }
+                        else -> false
+                    }
+                } else if (event.key == Key.Escape && state.guide.step == null) {
+                    when {
+                        confirmClose -> { confirmClose = false; true }
+                        model.feedback.open -> { model.feedback.dismiss(); true }
+                        state.serverPack != null -> { state.serverPack = null; true }
+                        state.elySignIn -> { model.ely.reset(); state.elySignIn = false; true }
+                        state.microsoftSignIn -> { model.microsoft.cancel(); state.microsoftSignIn = false; true }
+                        model.askingForFolder -> { model.cancelFolderQuestion(); true }
+                        state.downloadsOpen -> { state.downloadsOpen = false; true }
+                        state.notificationsOpen -> { state.notificationsOpen = false; true }
+                        state.section == Section.Console || state.section == Section.Settings -> { state.section = Section.Home; true }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
+            }
             .onPointerEvent(PointerEventType.Move) { event ->
                 val p = event.changes.first().position
                 parallax.x = p.x / size.width * 2 - 1
@@ -173,7 +250,11 @@ fun FrameWindowScope.LauncherApp(
     ) {
         // Nothing here sits on a Surface, so the content colour has to be set once for the window —
         // left alone it stays Material's default black, which the dark theme cannot survive.
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+            LocalBackdropGlass provides backdrop,
+            LocalInGlass provides true,
+        ) {
             // Unless the player wants it alive, the island holds still while the game runs: it would only
             // be competing for the GPU. Minimised, nothing of it is seen, so it always stops.
             // Each section has its place on the island, and the camera flies there when it opens.
@@ -183,13 +264,14 @@ fun FrameWindowScope.LauncherApp(
                 options = SceneOptions(settings.sceneQuality, settings.sceneMotion, settings.sceneFps),
                 spot = state.section.spot,
                 modifier = Modifier.fillMaxSize(),
-                running = !windowState.isMinimized && !(settings.scenePausedInGame && model.status is PlayStatus.Running),
-                shaders = window.renderApi != GraphicsApi.SOFTWARE_FAST && window.renderApi != GraphicsApi.SOFTWARE_COMPAT,
+                running = !minimized && !(settings.scenePausedInGame && model.status is PlayStatus.Running),
+                shaders = shaders,
+                backdrop = backdrop,
             )
             // Underneath the bar, so the pills keep their clicks and the gaps between them drag the window.
-            WindowDraggableArea(Modifier.fillMaxWidth().height(88.dp)) { Box(Modifier.fillMaxSize()) }
+            dragArea()
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-                TopBar(model, state, windowState, requestClose)
+                TopBar(model, state, requestClose, windowControls)
             }
             ScreenCard(model, state, play, Modifier.padding(start = 16.dp, top = 88.dp, bottom = 16.dp))
             // A catalogue's filters, in their own panel right of the card, while its list is on screen.
@@ -212,7 +294,19 @@ fun FrameWindowScope.LauncherApp(
                 enter = fadeIn(tween(300, delayMillis = 250)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it / 3 },
                 exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { it / 3 },
             ) {
-                NewsCarousel(state.news, { state.news = it }, hidden = settings.newsHidden, onHiddenChange = { settings.newsHidden = it })
+                NewsCarousel(
+                    selected = state.news,
+                    onSelect = { state.news = it },
+                    hidden = settings.newsHidden,
+                    onHiddenChange = { settings.newsHidden = it },
+                    onAction = { index ->
+                        when (index) {
+                            0 -> state.section = Section.Mods
+                            1 -> state.openPacks(PackRequest.Import)
+                            2 -> state.section = Section.Servers
+                        }
+                    },
+                )
             }
             // Friends in the corner above the news, never under them: the card stops where the news begins.
             AnimatedVisibility(
@@ -228,6 +322,7 @@ fun FrameWindowScope.LauncherApp(
                     onHiddenChange = { settings.friendsHidden = it },
                     onJoin = { pack, address -> play(pack, address) },
                     onServerPack = { state.serverPack = it },
+                    onOpenSettings = { state.section = Section.Settings },
                 )
             }
             if (model.askingForFolder) FolderPrompt(onUse = model::useGameFolder, onCancel = model::cancelFolderQuestion)
@@ -237,24 +332,36 @@ fun FrameWindowScope.LauncherApp(
             if (model.feedback.open) FeedbackCard(model.feedback)
             if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
             GuideOverlay(state, settings)
-            ResizeEdges(windowState)
+            resizeEdges()
         }
     }
 }
 
 @Composable
-private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, windowState: WindowState, onClose: () -> Unit) {
+private fun TopBar(
+    model: LauncherModel,
+    state: LauncherState,
+    onClose: () -> Unit,
+    windowControls: @Composable (onClose: () -> Unit) -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.size(56.dp).glass(CircleShape), contentAlignment = Alignment.Center) {
-            LumiMark(plate = scheme.primary, glyph = scheme.onPrimary, size = 44.dp)
+        Tip("На главную") {
+            Box(
+                Modifier.size(56.dp)
+                    .glass(CircleShape, alpha = GlassAlpha)
+                    .clickable(role = Role.Button) { state.section = Section.Home },
+                contentAlignment = Alignment.Center,
+            ) {
+                LumiMark(plate = scheme.primary, glyph = scheme.onPrimary, size = 44.dp)
+            }
         }
         Row(
-            Modifier.glass(CircleShape).padding(6.dp),
+            Modifier.glass(CircleShape, alpha = GlassAlpha).padding(6.dp),
             horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
         ) {
             val items = Section.navigation
@@ -287,17 +394,31 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
         }
         Spacer(Modifier.weight(1f))
         Row(
-            Modifier.glass(CircleShape).padding(6.dp),
+            Modifier.glass(CircleShape, alpha = GlassAlpha).padding(6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { model.feedback.open = true }, Modifier.size(44.dp).guide(state, GuideAnchor.Feedback)) {
                 Icon(Icons.Outlined.Feedback, "Обратная связь")
             }
-            DownloadsButton(model, Modifier.guide(state, GuideAnchor.Downloads))
-            IconButton(onClick = {}, Modifier.size(44.dp)) {
-                BadgedBox(badge = { Badge() }) { Icon(Icons.Outlined.Notifications, "Уведомления") }
-            }
+            DownloadsButton(
+                model,
+                modifier = Modifier.guide(state, GuideAnchor.Downloads),
+                open = state.downloadsOpen,
+                onOpenChange = {
+                    state.downloadsOpen = it
+                    if (it) state.notificationsOpen = false
+                },
+            )
+            NotificationsButton(
+                model,
+                state,
+                open = state.notificationsOpen,
+                onOpenChange = {
+                    state.notificationsOpen = it
+                    if (it) state.downloadsOpen = false
+                },
+            )
             val inSettings = state.section == Section.Settings
             IconButton(
                 onClick = { state.section = if (inSettings) Section.Home else Section.Settings },
@@ -321,12 +442,12 @@ private fun FrameWindowScope.TopBar(model: LauncherModel, state: LauncherState, 
                         else -> Avatar(offline = true, size = 40.dp)
                     }
                 }
-                DropdownMenu(accounts, onDismissRequest = { accounts = false }, shape = RoundedCornerShape(20.dp)) {
+                GlassDropdownMenu(accounts, onDismissRequest = { accounts = false }) {
                     AccountMenuItems(model, state, onDone = { accounts = false })
                 }
             }
         }
-        WindowControls(windowState, onClose)
+        windowControls(onClose)
     }
 }
 
@@ -339,7 +460,7 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
         else -> 520.dp
     }
     val width by animateDpAsState(target, spring(dampingRatio = 0.8f, stiffness = 380f))
-    Box(modifier.width(width).fillMaxHeight().glass(RoundedCornerShape(40.dp)).padding(28.dp)) {
+    Box(modifier.width(width).fillMaxHeight().glass(RoundedCornerShape(40.dp), alpha = CardGlassAlpha, elevation = 18.dp).padding(28.dp)) {
         AnimatedContent(
             targetState = state.section,
             transitionSpec = { fadeIn(tween(220, delayMillis = 90)) togetherWith fadeOut(tween(90)) },
@@ -359,7 +480,7 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
                 )
                 Section.Mods -> ModsScreen(model, state, onEditPack = { state.openPacks(PackRequest.Edit(it.id)) })
                 Section.Settings -> SettingsScreen(model, onGuide = { state.guide.start(state) })
-                Section.Console -> ConsoleScreen(model)
+                Section.Console -> ConsoleScreen(model, onBack = { state.section = Section.Home })
                 Section.Servers -> ServersScreen(
                     model,
                     state,

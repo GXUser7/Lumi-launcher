@@ -1,7 +1,7 @@
 ; Lumi Launcher's installer. Built by scripts/build-installer.ps1 from the application image that
 ; `:app:createDistributable` makes: the launcher with its own Java, nothing else to install first.
 
-#define AppVersion "1.1"
+#define AppVersion "1.2"
 #define AppImage "..\app\build\compose\binaries\main\app\LumiLauncher"
 #define AppExe "LumiLauncher.exe"
 

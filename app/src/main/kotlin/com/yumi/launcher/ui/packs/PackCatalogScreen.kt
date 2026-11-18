@@ -47,7 +47,6 @@ import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -83,8 +82,10 @@ import com.yumi.launcher.core.PackCatalog
 import com.yumi.launcher.core.PackHit
 import com.yumi.launcher.core.PackRelease
 import com.yumi.launcher.core.ReleaseType
+import com.yumi.launcher.core.Support
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.ui.components.CurseForgeKeyPrompt
+import com.yumi.launcher.ui.components.GlassDropdownMenu
 import com.yumi.launcher.ui.home.FilterPanel
 import com.yumi.launcher.ui.home.LauncherState
 import com.yumi.launcher.ui.components.Hint
@@ -97,10 +98,10 @@ import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.components.choiceColors
 import com.yumi.launcher.ui.components.compactCount
 import com.yumi.launcher.ui.components.connectedShapes
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import java.awt.Desktop
-import java.net.URI
 
 /**
  * Ready-made modpacks: search Modrinth or CurseForge by name, Minecraft version and loader, open a
@@ -223,7 +224,7 @@ internal fun GameVersionFilter(model: LauncherModel, version: String?, anyLabel:
             trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(FilterChipDefaults.IconSize)) },
             shape = CircleShape,
         )
-        DropdownMenu(open, onDismissRequest = { open = false }, shape = RoundedCornerShape(20.dp), modifier = Modifier.heightIn(max = 420.dp)) {
+        GlassDropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 420.dp)) {
             DropdownMenuItem(
                 text = { Text("Любая версия") },
                 trailingIcon = { if (version == null) Icon(Icons.Rounded.Check, null, tint = scheme.primary) },
@@ -251,7 +252,7 @@ private fun VersionItem(version: String, picked: Boolean, onClick: () -> Unit) {
 @Composable
 private fun HitCard(hit: PackHit, onOpen: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(onClick = onOpen, shape = RoundedCornerShape(24.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = onOpen, shape = RoundedCornerShape(24.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             RemoteIcon(hit.icon, Icons.Rounded.Inventory2, 60.dp)
             Spacer(Modifier.width(12.dp))
@@ -318,7 +319,7 @@ private fun PackDetail(model: LauncherModel, source: ModSource, hit: PackHit, pr
             Spacer(Modifier.width(4.dp))
             Text(hit.name, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
-        Surface(shape = RoundedCornerShape(28.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = RoundedCornerShape(28.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RemoteIcon(hit.icon, Icons.Rounded.Inventory2, 72.dp)
@@ -333,7 +334,7 @@ private fun PackDetail(model: LauncherModel, source: ModSource, hit: PackHit, pr
                     }
                 }
                 if (hit.pageUrl.isNotBlank()) {
-                    TextButton(onClick = { runCatching { Desktop.getDesktop().browse(URI(hit.pageUrl)) } }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    TextButton(onClick = { Support.open(hit.pageUrl) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Страница сборки на ${source.label}")
@@ -387,8 +388,8 @@ private fun ReleaseRow(release: PackRelease, recommended: Boolean, enabled: Bool
     val scheme = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = if (recommended) scheme.surfaceContainerHigh else scheme.surfaceContainer,
-        border = if (recommended) BorderStroke(2.dp, scheme.primary) else null,
+        color = glassContainer(elevated = recommended),
+        border = if (recommended) BorderStroke(2.dp, scheme.primary) else glassInnerBorder(),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

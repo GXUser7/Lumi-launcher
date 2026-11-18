@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.ui.theme.PopGlassAlpha
 import com.yumi.launcher.ui.theme.glass
 
 /**
@@ -35,7 +36,7 @@ fun ModalCard(width: Dp = 480.dp, content: @Composable ColumnScope.() -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            Modifier.width(width).glass(RoundedCornerShape(36.dp)).padding(28.dp),
+            Modifier.width(width).glass(RoundedCornerShape(36.dp), alpha = PopGlassAlpha, elevation = 24.dp).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             content = content,
         )

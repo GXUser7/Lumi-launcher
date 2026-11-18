@@ -67,6 +67,8 @@ import com.yumi.launcher.ui.components.Field
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.InfoChip
 import com.yumi.launcher.ui.components.Label
+import com.yumi.launcher.ui.theme.glassContainer
+import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -136,8 +138,9 @@ internal fun Whitelist(model: LauncherModel, profile: ServerProfile, session: Se
         val scheme = MaterialTheme.colorScheme
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = if (on) scheme.primaryContainer else scheme.surfaceContainer,
+            color = if (on) scheme.primaryContainer else glassContainer(),
             contentColor = if (on) scheme.onPrimaryContainer else scheme.onSurface,
+            border = if (on) null else glassInnerBorder(),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(Modifier.padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -244,7 +247,7 @@ private class QuickAdd(val name: String, val who: String, val icon: ImageVector)
 @Composable
 private fun WhitelistRow(entry: WhitelistEntry, online: Boolean, canRemove: Boolean, onRemove: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(22.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(22.dp), color = glassContainer(), border = glassInnerBorder(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(offline = true, size = 40.dp)
             Spacer(Modifier.width(12.dp))

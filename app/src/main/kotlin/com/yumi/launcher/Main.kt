@@ -80,6 +80,7 @@ fun main(args: Array<String>) {
         "--friends-test" -> exitProcess(friendsTest(args.drop(1)))
         "--content-test" -> exitProcess(contentTest(args.drop(1)))
         "--scene-shot" -> exitProcess(sceneShot(args.drop(1)))
+        "--headless-smoke" -> exitProcess(headlessSmoke(args.drop(1)))
     }
     // The launcher's own log, for "Отправить лог"; a smoke run leaves the real one alone.
     if ("--ui-smoke" !in args) LauncherLog.install()
@@ -477,7 +478,7 @@ private fun launcher(args: Array<String>) = application {
 }
 
 /** A `level.dat` as the game writes it, with what the world list reads from it — for the smoke run's saved worlds. */
-private fun smokeLevel(name: String, mode: Int, lastPlayed: Long, cheats: Boolean = false): ByteArray {
+internal fun smokeLevel(name: String, mode: Int, lastPlayed: Long, cheats: Boolean = false): ByteArray {
     val bytes = ByteArrayOutputStream()
     DataOutputStream(GZIPOutputStream(bytes)).use { out ->
         out.writeByte(10); out.writeUTF("")
@@ -497,7 +498,7 @@ private fun smokeLevel(name: String, mode: Int, lastPlayed: Long, cheats: Boolea
 }
 
 /** What the smoke run's terminal shows: a server that has just come up and two friends joining it. */
-private val SMOKE_LOG = listOf(
+internal val SMOKE_LOG = listOf(
     "[12:00:01] [Server thread/INFO]: Starting minecraft server version 1.21.1",
     "[12:00:02] [Server thread/INFO]: Loading properties",
     "[12:00:02] [Server thread/INFO]: Default game type: SURVIVAL",

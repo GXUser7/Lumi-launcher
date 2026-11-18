@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.toSize
 import com.yumi.launcher.settings.LauncherSettings
 import com.yumi.launcher.ui.components.Hint
 import com.yumi.launcher.ui.components.ShapeTile
+import com.yumi.launcher.ui.theme.PopGlassAlpha
 import com.yumi.launcher.ui.theme.glass
 import kotlin.math.roundToInt
 
@@ -268,7 +269,7 @@ private fun GuideCard(step: GuideStep, index: Int, onBack: () -> Unit, onNext: (
     val scheme = MaterialTheme.colorScheme
     val last = index == STEPS.lastIndex
     Column(
-        Modifier.width(380.dp).glass(RoundedCornerShape(30.dp)).padding(22.dp),
+        Modifier.width(380.dp).glass(RoundedCornerShape(30.dp), alpha = PopGlassAlpha, elevation = 24.dp).padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AnimatedContent(index, transitionSpec = { fadeIn(tween(200, delayMillis = 60)) togetherWith fadeOut(tween(80)) }) { shown ->

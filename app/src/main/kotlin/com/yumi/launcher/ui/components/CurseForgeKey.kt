@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yumi.launcher.core.CurseForge
+import com.yumi.launcher.ui.theme.glassContainer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -67,7 +68,7 @@ fun CurseForgeKeyPrompt(onSave: (String) -> Unit) {
     var key by remember { mutableStateOf("") }
     val check = rememberKeyCheck(key)
     val scheme = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(26.dp), color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(26.dp), color = glassContainer(), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ShapeTile(Icons.Rounded.Key, scheme.secondaryContainer, scheme.onSecondaryContainer, 40.dp)
