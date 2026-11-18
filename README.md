@@ -1,8 +1,73 @@
+<div align="center">
+
+<img src="docs/icon.svg" width="112" alt="Lumi Launcher">
+
 # Lumi Launcher
 
-Лаунчер для Minecraft, чтобы легко играть с друзьями — даже без лицензии. Красивый, простой и
-всё делает сам: скачивает игру, моды и даже поднимает сервер у вас на компьютере. Вместо
-картинки на фоне — живой парящий остров.
+**Лаунчер Minecraft для Windows, чтобы легко играть с друзьями — даже без лицензии.**
+
+Сам скачивает игру, Java, сборки и моды, поднимает сервер у вас на компьютере<br>и раздаёт друзьям ту же сборку. Вместо картинки на фоне — живой парящий остров.
+
+<br>
+
+[![Релиз](https://img.shields.io/github/v/release/GXUser7/Lumi-launcher?style=flat-square&label=release&labelColor=131A33&color=FFC85A)](https://github.com/GXUser7/Lumi-launcher/releases/latest)
+[![Загрузки](https://img.shields.io/github/downloads/GXUser7/Lumi-launcher/total?style=flat-square&label=downloads&labelColor=131A33&color=FFC85A)](https://github.com/GXUser7/Lumi-launcher/releases)
+[![Windows 10 · 11](https://img.shields.io/badge/Windows-10%20%C2%B7%2011-FFC85A?style=flat-square&labelColor=131A33&logo=windows&logoColor=white)](#как-начать)
+[![Minecraft Java Edition](https://img.shields.io/badge/Minecraft-Java%20Edition-FFC85A?style=flat-square&labelColor=131A33)](#что-умеет)
+[![Fabric · Quilt · Forge · NeoForge](https://img.shields.io/badge/моды-Fabric%20%C2%B7%20Quilt%20%C2%B7%20Forge%20%C2%B7%20NeoForge-FFC85A?style=flat-square&labelColor=131A33)](#сборки)
+![Kotlin · Compose](https://img.shields.io/badge/Kotlin-Compose%20Desktop-FFC85A?style=flat-square&labelColor=131A33&logo=kotlin&logoColor=white)
+
+<br>
+
+### [Скачать последнюю версию](https://github.com/GXUser7/Lumi-launcher/releases/latest)
+
+[Что умеет](#что-умеет) &nbsp;·&nbsp; [Как начать](#как-начать) &nbsp;·&nbsp; [Играть с друзьями](#как-поиграть-с-друзьями) &nbsp;·&nbsp; [Вопросы](#частые-вопросы) &nbsp;·&nbsp; [Новости в Telegram](https://t.me/MaterialYouCloud)
+
+<br>
+
+<img src="docs/screens/home.webp" width="100%" alt="Главная Lumi Launcher над парящим островом ночью">
+
+</div>
+
+<br>
+
+> **Yumi Launcher теперь Lumi Launcher.** С версии 1.1 у лаунчера новое имя и иконка-фонарь, чтобы
+> его не путали с VPN Yumi. Обновление ставится поверх старой версии: сборки, миры, серверы,
+> аккаунты и настройки остаются на месте.
+
+## Почему Lumi
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>Без лицензии</h3>
+      Ник — и можно играть. Хотите свой скин — вход через Ely.by, есть лицензия — через Microsoft. Друзья без лицензии тоже зайдут на ваш сервер.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Одна кнопка вместо инструкций</h3>
+      Лаунчер сам ставит игру, Java, загрузчик и моды с зависимостями. Друг получает точно такую же сборку, как на вашем сервере, — одной кнопкой.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Живой остров и матовое стекло</h3>
+      Вместо картинки — детализированный воксельный остров с маяком, пристанью, мостиком, сакурой и водопадом. Поверх него парят матовые полупрозрачные карточки, а у каждого раздела своё место.
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screens/mods.webp" alt="Каталог модов"><p align="center"><b>Моды прямо в кузнице</b> — Modrinth и CurseForge, шейдеры и ресурспаки</p></td>
+    <td width="50%"><img src="docs/screens/packs.webp" alt="Сборки"><p align="center"><b>Сборки</b> — свои и готовые из каталога, каждая со своими мирами</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/server.webp" alt="Свой сервер"><p align="center"><b>Свой сервер</b> — из любой сборки, адрес для друзей в один клик</p></td>
+    <td><img src="docs/screens/join.webp" alt="Быстрый вход"><p align="center"><b>Быстрый вход</b> — пинг, игроки и «Сборка сервера» для чужих серверов</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/home-light.webp" alt="Светлая тема"><p align="center"><b>Светлая тема</b> — и десять палитр цветов</p></td>
+    <td><img src="docs/screens/settings.webp" alt="Настройки"><p align="center"><b>Остров от «Низкого» до «Ультра»</b> — под любой компьютер</p></td>
+  </tr>
+</table>
 
 ## Что умеет
 
@@ -56,8 +121,9 @@
     нужной версии, а моды придётся узнать у владельца сервера.
 
 ### Друзья
+
 - Друзья работают через свой сервер друзей: кто-то из компании поднимает его (например, на
-  Amvera, код — в `friends-server/`) и раздаёт адрес, а все вписывают этот адрес в **«Настройках»**
+  Amvera — [файлы и инструкция](friends-server/README.md)) и раздаёт адрес, а все вписывают этот адрес в **«Настройках»**
   → **«Друзья»**. Пока адреса нет, друзья выключены.
 - На главной справа — ваши друзья: кто в сети, во что играет и на каком сервере. Если друг на
   сервере, рядом с ним кнопка **«Зайти к другу»** — лаунчер сам выберет подходящую сборку.
@@ -108,6 +174,7 @@
 
 1. Запустите `Lumi-Launcher-<версия>-windows-x64-setup.exe`. Права администратора не нужны: лаунчер
    ставится только для вас, в `%LOCALAPPDATA%\Programs\Lumi Launcher`, со своей Java внутри.
+   Если у вас уже стоит Yumi Launcher, обновление встанет в его папку и заменит ярлыки.
    Установщик не подписан, поэтому Windows может предупредить о нём: «Подробнее» → «Выполнить в
    любом случае». Нужна 64-битная Windows 10 или 11.
 2. Запустите лаунчер и введите ник на главной.
@@ -162,20 +229,15 @@ Lumi проверит размер и SHA-1 и скопирует файл в с
 Некоторые моды есть только у владельца сервера или только на CurseForge. Попросите у владельца
 недостающие файлы или добавьте ключ CurseForge в настройках — лаунчер покажет, чего не хватает.
 
-## Для разработчиков
+## Сборка из исходников
 
-Лаунчер написан на Kotlin и Compose Desktop. Запуск из исходников:
+Исходный код лаунчера полностью открыт в этом репозитории (Kotlin 2.3 + Compose Multiplatform Desktop, JDK 21). Готовые установщики для Windows лежат в [Releases](https://github.com/GXUser7/Lumi-launcher/releases), а сервер друзей — в [friends-server/](friends-server/README.md).
 
-```bash
-source /e/Projects/.tools/env.sh
-export GRADLE_USER_HOME=C:/Users/000/.gradle
-./gradlew :app:run
-```
-
-Установщик собирается одной командой (нужен Inno Setup 6), результат — в `dist/`:
+Запуск из исходников и сборка установщика (нужен JDK 21; для установщика — Inno Setup 6):
 
 ```powershell
-./scripts/build-installer.ps1 -Offline
+.\gradlew.bat :app:run
+.\scripts\build-installer.ps1
 ```
 
-Как всё устроено, как проверять и о чём помнить — в [AGENTS.md](AGENTS.md).
+Устройство проекта, режимы headless-проверок и архитектурные заметки — в [AGENTS.md](AGENTS.md).
