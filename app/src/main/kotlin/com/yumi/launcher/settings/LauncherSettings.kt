@@ -128,6 +128,9 @@ class LauncherSettings(private val store: Preferences = Preferences.userRoot().n
     /** Mojang's EULA, accepted once in the new-server form; every server made after that inherits it. */
     var serverEulaAccepted by stored("serverEulaAccepted", false, { it == "true" }, { it.toString() })
 
+    /** Automatic background checks and pre-staging for installer updates from GitHub Releases. */
+    var autoUpdate by stored("autoUpdate", true, { it != "false" }, { it.toString() })
+
     // Ely.by: the token pair from signing in, never the password.
     private var elyAccessToken by stored("elyAccessToken", "", { it }, { it })
     private var elyClientTokenStored by stored("elyClientToken", "", { it }, { it })

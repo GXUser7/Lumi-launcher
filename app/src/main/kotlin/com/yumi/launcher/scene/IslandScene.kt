@@ -182,9 +182,9 @@ internal fun islandScene(): Scene {
             // back, the anvil in the middle, the furnaces on the right, the lantern hanging over it
             // all. It comes in under the beam, past the corner post.
             SceneSpot.Forge to lookFrom(floatArrayOf(-6.4f, G + 3.3f, 9.2f), floatArrayOf(-10f, 3.7f, 5.8f), fov = 68f, pull = 7f, rise = 1f),
-            // On the path, looking in through the library's open south side — between its corner
-            // posts, at the enchanting table and the shelves behind; it comes in craning down.
-            SceneSpot.Library to lookFrom(floatArrayOf(-9f, b.eye(-9f, -0.8f), -0.8f), floatArrayOf(-9.2f, 4.1f, -8.6f), fov = 56f, pull = 2.5f, rise = 5f),
+            // Looking diagonally from the south-west threshold into the vaulted library, clearing
+            // the tie-beam cleanly so the bookshelves, lectern, study desk and altar fill the frame.
+            SceneSpot.Library to lookFrom(floatArrayOf(-11.1f, G + 3.15f, -3.6f), floatArrayOf(-7.8f, G + 2.45f, -9.1f), fov = 64f, pull = 3.6f, rise = 2.2f, offsetX = 0.22f),
             // Low on the ground in front of the portal, looking up at it.
             SceneSpot.Portal to lookFrom(floatArrayOf(9f, b.eye(9f, 1.5f) - 0.6f, 1.5f), floatArrayOf(9f, 6f, -7.5f), fov = 50f, pull = 5f, rise = 4f),
             SceneSpot.Campfire to CameraPose(floatArrayOf(3f, 3.6f, 7.5f), distance = 11f, yaw = -0.25f, pitch = 0.26f, fov = 50f),
@@ -233,6 +233,7 @@ private fun glowsOf(world: World): List<GlowPoint> = world.lights.mapIndexedNotN
         Block.Campfire -> 2.0f
         Block.Lantern, Block.SoulLantern -> 1.3f
         Block.Torch -> 0.9f
+        Block.Candles -> 0.68f
         Block.Furnace -> 1.1f
         Block.GlowVine -> 0.55f
         Block.CryingObsidian -> 0.5f
@@ -241,6 +242,7 @@ private fun glowsOf(world: World): List<GlowPoint> = world.lights.mapIndexedNotN
     }
     val y = when (block) {
         Block.Torch -> light.y + 0.62f
+        Block.Candles -> light.y + 0.58f
         Block.Lantern, Block.SoulLantern -> light.y + 0.25f
         Block.LavaCauldron -> light.y + 1.0f
         Block.Campfire -> light.y + 0.5f
@@ -609,41 +611,92 @@ private class Builder(val w: World, val rng: Rng) {
     }
 
     /**
-     * The library — the packs place: walls of bookshelves on the north and east, open to the west
-     * and the south, an enchanting table with its book floating over a red carpet, lanterns, and a
-     * cherry roof. [x0], [z0] is its north-west corner.
+     * The library — the packs place: a tall cherry-and-oak hall with mixed carved shelves on the
+     * north and east, a study desk with a globe, an arcane lectern, a candle-lit reading corner,
+     * and the enchanting altar on a crimson-and-gold rug. [x0], [z0] is its north-west corner.
      */
     fun library(x0: Int, z0: Int) {
         val x1 = x0 + 7
         val z1 = z0 + 7
         pad(x0 - 3, z0 - 1, x1 + 1, z1 + 2, G, Block.StoneBricks)
-        fill(x0 + 1, G, z0 + 1, x1 - 1, G, z1 - 1, Block.OakPlanks)
-        for ((x, z) in listOf(x0 to z0, x1 to z0, x0 to z1, x1 to z1)) fill(x, G + 1, z, x, G + 4, z, Block.CherryLog)
-        for (z in z0 + 1 until z1) for (y in G + 1..G + 3) w[x1, y, z] = Block.Bookshelf
-        for (x in x0 + 1 until x1) for (y in G + 1..G + 3) w[x, y, z0] = Block.Bookshelf
-        // A window in each wall.
-        w.put(x1, G + 2, z0 + 4, Block.Glass, 1)
-        w.put(x0 + 3, G + 2, z0, Block.Glass, 0)
-        for (x in x0 + 3..x0 + 5) for (z in z0 + 3..z0 + 5) w[x, G + 1, z] = Block.RedCarpet
+        // Parquet oak floor framed with a darker spruce perimeter.
+        for (x in x0 + 1 until x1) for (z in z0 + 1 until z1) {
+            val edge = x == x0 + 1 || x == x1 - 1 || z == z0 + 1 || z == z1 - 1
+            w[x, G, z] = if (edge) Block.SprucePlanks else Block.OakPlanks
+        }
+        // Tall corner cherry pillars reaching the raised tie-beams.
+        for ((x, z) in listOf(x0 to z0, x1 to z0, x0 to z1, x1 to z1)) {
+            fill(x, G + 1, z, x, G + 5, z, Block.CherryLog)
+        }
+        // Four-block-high bookshelf walls with carved chiseled cubbies and oak pilasters.
+        for (z in z0 + 1 until z1) for (y in G + 1..G + 4) {
+            w[x1, y, z] = when {
+                z == z0 + 3 -> Block.OakLog
+                (z + y) % 3 == 0 -> Block.ChiseledShelf
+                else -> Block.Bookshelf
+            }
+        }
+        for (x in x0 + 1 until x1) for (y in G + 1..G + 4) {
+            w[x, y, z0] = when {
+                x == x0 + 3 -> Block.OakLog
+                (x + y) % 3 == 0 -> Block.ChiseledShelf
+                else -> Block.Bookshelf
+            }
+        }
+        // Low shelf dado along the back west bay, leaving the south-west approach open.
+        for (z in z0 + 1..z0 + 3) for (y in G + 1..G + 2) {
+            w[x0, y, z] = if ((z + y) % 2 == 0) Block.ChiseledShelf else Block.Bookshelf
+        }
+        w[x0, G + 3, z0 + 1] = Block.PottedPlant
+        w[x0, G + 3, z0 + 2] = Block.Candles
+
+        // Tall two-block glazed windows in the north and east walls, plus an exterior planter.
+        w.put(x0 + 2, G + 2, z0, Block.Glass, 0)
+        w.put(x0 + 2, G + 3, z0, Block.Glass, 0)
+        w.put(x1, G + 2, z0 + 5, Block.Glass, 1)
+        w.put(x1, G + 3, z0 + 5, Block.Glass, 1)
+        w[x1 + 1, G + 1, z0 + 5] = Block.PottedPlant
+
+        // Central enchanting altar on a crimson rug trimmed in gold.
+        for (x in x0 + 3..x0 + 5) for (z in z0 + 3..z0 + 5) {
+            val center = x == x0 + 4 && z == z0 + 4
+            w[x, G + 1, z] = if (center) Block.RedCarpet else Block.GoldCarpet
+        }
         w[x0 + 4, G + 1, z0 + 4] = Block.Enchanting
         w[x0 + 4, G + 2, z0 + 4] = Block.Book
         emitters += Emitter(Emitter.Kind.Enchant, x0 + 4.5f, G + 2.4f, z0 + 4.5f, 2.2f)
-        w[x1 - 1, G + 1, z0 + 1] = Block.Chest
-        w[x1 - 1, G + 1, z1 - 1] = Block.Barrel
-        w[x1 - 1, G + 2, z1 - 1] = Block.Lantern
-        w[x0 + 1, G + 1, z0 + 1] = Block.Bookshelf
-        w[x0 + 1, G + 2, z0 + 1] = Block.Lantern
-        // Beams, then a pink roof over it all.
-        fill(x0, G + 4, z0, x0, G + 4, z1, Block.OakLog, 2)
-        fill(x1, G + 4, z0, x1, G + 4, z1, Block.OakLog, 2)
-        fill(x0 + 1, G + 4, z0, x1 - 1, G + 4, z0, Block.OakLog, 1)
-        fill(x0 + 1, G + 4, z1, x1 - 1, G + 4, z1, Block.OakLog, 1)
-        roofAlongZ(x0 - 1, x1 + 1, z0 - 1, z1 + 1, G + 5, Block.CherryStairs, Block.CherryPlanks)
-        hang(x0 + 4, G + 3, z0 + 2)
-        // A quiet outdoor reading bench against the open west terrace.
+
+        // Scholar's study desk with brass globe and beeswax candles in the north-west corner.
+        w[x0 + 1, G + 1, z0 + 1] = Block.StudyTable
+        w[x0 + 2, G + 1, z0 + 1] = Block.StudyTable
+        w[x0 + 1, G + 2, z0 + 1] = Block.Globe
+        w[x0 + 2, G + 2, z0 + 1] = Block.Candles
+        w.put(x0 + 1, G + 1, z0 + 2, Block.CherryStairs, Facing.NORTH)
+
+        // Arcane lectern and north-east archive barrel topped with amethyst.
+        w[x0 + 5, G + 1, z0 + 2] = Block.Lectern
+        w[x1 - 1, G + 1, z0 + 1] = Block.Barrel
+        w[x1 - 1, G + 2, z0 + 1] = Block.Amethyst
+        w.put(x1 - 1, G + 1, z0 + 2, Block.Chest, Facing.WEST)
+
+        // Reading armchair with candle side-table near the east window and a potted flower opposite.
+        w.put(x1 - 1, G + 1, z1 - 1, Block.CherryStairs, Facing.WEST)
+        w[x1 - 1, G + 1, z1 - 2] = Block.StudyTable
+        w[x1 - 1, G + 2, z1 - 2] = Block.Candles
+        w[x0 + 1, G + 1, z1 - 1] = Block.PottedPlant
+
+        // Raised tie-beams at G+5 and vaulted cherry gable roof at G+6.
+        fill(x0, G + 5, z0, x0, G + 5, z1, Block.OakLog, 2)
+        fill(x1, G + 5, z0, x1, G + 5, z1, Block.OakLog, 2)
+        fill(x0 + 1, G + 5, z0, x1 - 1, G + 5, z0, Block.OakLog, 1)
+        fill(x0 + 1, G + 5, z1, x1 - 1, G + 5, z1, Block.OakLog, 1)
+        roofAlongZ(x0 - 1, x1 + 1, z0 - 1, z1 + 1, G + 6, Block.CherryStairs, Block.CherryPlanks)
+        hang(x0 + 4, G + 4, z0 + 3)
+        hang(x1 - 1, G + 4, z0 + 4)
+
+        // Quiet outdoor reading bench and lantern posts along the west terrace.
         w.put(x0 - 2, G + 1, z0 + 3, Block.OakStairs, Facing.WEST)
         w.put(x0 - 2, G + 1, z0 + 4, Block.OakStairs, Facing.WEST)
-        // Lanterns on posts on the open side.
         for (z in intArrayOf(z0 + 1, z1 - 1)) {
             w[x0 - 2, G + 1, z] = Block.Fence
             w[x0 - 2, G + 2, z] = Block.Lantern

@@ -43,7 +43,11 @@ sealed interface PlayStatus {
  * The launcher's working state: packs, Mojang's version list, and the one game it runs at a time,
  * from the first download to the process exiting.
  */
-class LauncherModel(val settings: LauncherSettings, private val scope: CoroutineScope) {
+class LauncherModel(
+    val settings: LauncherSettings,
+    private val scope: CoroutineScope,
+    autoCheckUpdates: Boolean = true,
+) {
     val instances: InstanceStore = run {
         settings.gameDir.takeIf { it.isNotBlank() }?.let { LauncherPaths.root = File(it) }
         InstanceStore()
@@ -91,6 +95,13 @@ class LauncherModel(val settings: LauncherSettings, private val scope: Coroutine
     val friends = FriendsModel(this, scope)
     val feedback = Feedback(this, scope)
     val downloads = Downloads(this)
+    val updater = AppUpdater(
+        settings = settings,
+        scope = scope,
+        autoCheck = autoCheckUpdates,
+        isBusy = { busy || servers.anyActive },
+        onRecordDownload = { title, what, error -> downloads.record(title, what, error) },
+    )
 
     private var process: Process? = null
     private var job: Job? = null

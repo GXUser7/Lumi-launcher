@@ -36,7 +36,10 @@ try {
     & $InnoCompiler /Q installer\LumiLauncher.iss
     if ($LASTEXITCODE -ne 0) { throw 'Compiling the installer failed.' }
     Get-ChildItem dist\*setup.exe | ForEach-Object {
+        $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $shaPath = "$($_.FullName).sha256"
+        [System.IO.File]::WriteAllText($shaPath, "$hash  $($_.Name)`n", [System.Text.UTF8Encoding]::new($false))
         '{0}  {1:N1} MB' -f $_.Name, ($_.Length / 1MB)
-        (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+        "SHA-256: $hash -> $(Split-Path $shaPath -Leaf)"
     }
 } finally { Pop-Location }

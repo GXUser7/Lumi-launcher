@@ -52,7 +52,7 @@ internal class Rng(seed: Int) {
 // ---------- blocks ----------
 
 /** How a block is built out of quads. */
-internal enum class Shape { Cube, Cross, Slab, Stairs, Torch, Lantern, Chain, Fence, Pane, Anvil, Flat, Campfire, Chest, Book, Log }
+internal enum class Shape { Cube, Cross, Slab, Stairs, Torch, Lantern, Chain, Fence, Pane, Anvil, Flat, Campfire, Chest, Book, Log, Lectern, Table, Pot, Candles, Globe }
 
 /** What moves on a face: scrolling liquids and fire, swaying leaves and plants, the floating book. */
 internal enum class Anim { None, Water, Fall, Lava, Portal, Fire, Leaves, Plant, Bob }
@@ -125,6 +125,7 @@ internal enum class Block(
     SmoothStone(Tile.SMOOTH_STONE),
     Glass(Tile.GLASS, shape = Shape.Pane, merges = true),
     Bookshelf(Tile.OAK_PLANKS, Tile.BOOKSHELF, Tile.OAK_PLANKS),
+    ChiseledShelf(Tile.OAK_PLANKS, Tile.CHISELED_SHELF, Tile.OAK_PLANKS),
     Crafting(Tile.CRAFTING_TOP, Tile.CRAFTING_SIDE, Tile.OAK_PLANKS),
     Smithing(Tile.SMITHING_TOP, Tile.CRAFTING_SIDE, Tile.OAK_PLANKS),
     Furnace(Tile.FURNACE_TOP, Tile.FURNACE_SIDE, Tile.FURNACE_TOP, light = 13, glow = Glow.Fire),
@@ -132,11 +133,16 @@ internal enum class Block(
     Lantern(Tile.LANTERN, shape = Shape.Lantern, light = 15, emit = 1f),
     SoulLantern(Tile.SOUL_LANTERN, shape = Shape.Lantern, light = 12, glow = Glow.Soul, emit = 1f),
     Torch(Tile.TORCH, shape = Shape.Torch, light = 14, glow = Glow.Fire),
+    Candles(Tile.CANDLE, shape = Shape.Candles, light = 12, glow = Glow.Warm, emit = 0.85f),
     Chain(Tile.CHAIN, shape = Shape.Chain),
     Fence(Tile.OAK_PLANKS, shape = Shape.Fence),
     Hay(Tile.HAY_TOP, Tile.HAY_SIDE, Tile.HAY_TOP),
     Barrel(Tile.BARREL_TOP, Tile.BARREL_SIDE, Tile.BARREL_TOP),
     Chest(Tile.CHEST, shape = Shape.Chest),
+    Lectern(Tile.LECTERN, Tile.OAK_PLANKS, Tile.OAK_PLANKS, shape = Shape.Lectern),
+    StudyTable(Tile.SPRUCE_PLANKS, shape = Shape.Table),
+    PottedPlant(Tile.FLOWER_POT, shape = Shape.Pot),
+    Globe(Tile.GLOBE, shape = Shape.Globe),
     TallGrass(Tile.TALL_GRASS, shape = Shape.Cross, anim = Anim.Plant),
     Poppy(Tile.POPPY, shape = Shape.Cross, anim = Anim.Plant),
     Dandelion(Tile.DANDELION, shape = Shape.Cross, anim = Anim.Plant),
@@ -150,6 +156,7 @@ internal enum class Block(
     Petals(Tile.PINK_PETALS, shape = Shape.Flat),
     LilyPad(Tile.LILY_PAD, shape = Shape.Flat),
     RedCarpet(Tile.RED_WOOL, shape = Shape.Flat),
+    GoldCarpet(Tile.GOLD_CARPET, shape = Shape.Flat),
     Enchanting(Tile.ENCHANT_TOP, Tile.ENCHANT_SIDE, Tile.OBSIDIAN, shape = Shape.Slab, light = 7, glow = Glow.Crystal),
     Book(Tile.BOOK, shape = Shape.Book, anim = Anim.Bob),
     Campfire(Tile.CAMPFIRE_LOG, shape = Shape.Campfire, light = 15, glow = Glow.Fire),
@@ -378,6 +385,38 @@ private class Mesher(val world: World, val out: MutableList<Face>, val inflate: 
             Shape.Book -> {
                 box(x, y, z, block, 4, 3, 6, 8, 4, 10, tile = Tile.BOOK)
                 box(x, y, z, block, 8, 3, 6, 12, 4, 10, tile = Tile.BOOK)
+            }
+            Shape.Lectern -> {
+                box(x, y, z, block, 2, 0, 2, 14, 2, 14, tile = Tile.OAK_PLANKS)
+                box(x, y, z, block, 5, 2, 5, 11, 11, 11, tile = Tile.OAK_PLANKS)
+                box(x, y, z, block, 1, 11, 8, 15, 14, 14)
+                box(x, y, z, block, 1, 11, 2, 15, 16, 8)
+            }
+            Shape.Table -> {
+                box(x, y, z, block, 0, 12, 0, 16, 16, 16)
+                box(x, y, z, block, 1, 0, 1, 4, 12, 4)
+                box(x, y, z, block, 12, 0, 1, 15, 12, 4)
+                box(x, y, z, block, 1, 0, 12, 4, 12, 15)
+                box(x, y, z, block, 12, 0, 12, 15, 12, 15)
+            }
+            Shape.Pot -> {
+                box(x, y, z, block, 5, 0, 5, 11, 6, 11)
+                box(x, y, z, block, 6, 6, 6, 10, 7, 10, tile = Tile.DIRT)
+                cross(x, y, z, block, tile = Tile.ALLIUM, lift = 6f, jitter = false)
+            }
+            Shape.Candles -> {
+                box(x, y, z, block, 4, 0, 5, 7, 7, 8)
+                box(x, y, z, block, 5, 7, 6, 6, 9, 7, tile = Tile.FLAME, emit = 1f)
+                box(x, y, z, block, 9, 0, 3, 12, 10, 6)
+                box(x, y, z, block, 10, 10, 4, 11, 12, 5, tile = Tile.FLAME, emit = 1f)
+                box(x, y, z, block, 8, 0, 9, 11, 5, 12)
+                box(x, y, z, block, 9, 5, 10, 10, 7, 11, tile = Tile.FLAME, emit = 1f)
+            }
+            Shape.Globe -> {
+                box(x, y, z, block, 5, 0, 5, 11, 2, 11, tile = Tile.BRASS)
+                box(x, y, z, block, 7, 2, 7, 9, 3, 9, tile = Tile.BRASS)
+                box(x, y, z, block, 3, 3, 7, 13, 13, 9, tile = Tile.BRASS)
+                box(x, y, z, block, 4, 4, 4, 12, 12, 12)
             }
         }
     }
@@ -630,9 +669,9 @@ private class Mesher(val world: World, val out: MutableList<Face>, val inflate: 
     }
 
     /** Two quads crossing on the diagonals, drawn from both sides: grass, flowers, vines, fire. */
-    fun cross(x: Int, y: Int, z: Int, block: Block, tile: Int = block.top, emit: Float = block.emit, anim: Anim = block.anim, lift: Float = 0f) {
-        val jitterX = (hash(x, z, 3) - 0.5f) * 0.3f
-        val jitterZ = (hash(z, x, 5) - 0.5f) * 0.3f
+    fun cross(x: Int, y: Int, z: Int, block: Block, tile: Int = block.top, emit: Float = block.emit, anim: Anim = block.anim, lift: Float = 0f, jitter: Boolean = true) {
+        val jitterX = if (jitter) (hash(x, z, 3) - 0.5f) * 0.3f else 0f
+        val jitterZ = if (jitter) (hash(z, x, 5) - 0.5f) * 0.3f else 0f
         val bottom = y + lift / 16f
         val top = y + 1f
         val a = 0.14f
@@ -712,7 +751,7 @@ internal fun World.bakeLight() {
         if (block.light > 0) {
             val i = index(x, y, z)
             val id = lights.size
-            lights += LightSource(x, y, z, block.glow, block == Block.Torch || block == Block.Campfire || block == Block.Lantern || block == Block.Furnace)
+            lights += LightSource(x, y, z, block.glow, block == Block.Torch || block == Block.Campfire || block == Block.Lantern || block == Block.Furnace || block == Block.Candles)
             torch[i] = block.light.toByte()
             source[i] = id.toShort()
             queue[tail++] = i

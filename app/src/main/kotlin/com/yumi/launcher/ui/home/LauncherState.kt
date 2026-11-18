@@ -1,5 +1,6 @@
 package com.yumi.launcher.ui.home
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Dns
@@ -109,6 +110,9 @@ class LauncherState {
 
     /** The modpack catalogue's search, kept here so the filters panel can change it and a return finds it as it was. */
     val packSearch = PackSearch()
+
+    /** Shared scroll state for Settings so smoke verification and section returns preserve scroll position. */
+    val settingsScroll = ScrollState(0)
 
     fun openPacks(request: PackRequest? = null) {
         packRequest = request

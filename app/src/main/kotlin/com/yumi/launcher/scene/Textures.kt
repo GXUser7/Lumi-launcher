@@ -108,6 +108,13 @@ internal object Tile {
     const val SPRUCE_PLANKS = 79
     const val SPRUCE_LEAVES = 80
     const val VERDIGRIS_COPPER = 81
+    const val CHISELED_SHELF = 82
+    const val GOLD_CARPET = 83
+    const val FLOWER_POT = 84
+    const val CANDLE = 85
+    const val GLOBE = 86
+    const val BRASS = 87
+    const val FLAME = 88
 
     // Two tiles tall each: the pattern is painted twice, one above the other, and scrolls.
     const val WATER = 96
@@ -567,6 +574,81 @@ private class Painter(val px: IntArray, val stride: Int) {
             planks(oakPlank, rgb(0x6F5530))
             rect(3, 2, 12, 8, rgb(0xE8DDB5))
             for (i in 3..12) this[i, 5] = rgb(0xC8B890)
+        }
+        tile(Tile.CHISELED_SHELF) {
+            planks(oakPlank, rgb(0x6F5530))
+            // Recessed dark timber cubbies so every pixel remains opaque while niches read deep.
+            rect(1, 1, 14, 6, rgb(0x2B1C10))
+            rect(1, 9, 14, 14, rgb(0x2B1C10))
+            for (x in 0 until 16) {
+                this[x, 0] = rgb(0x5A4329); this[x, 7] = rgb(0x6F5530)
+                this[x, 8] = rgb(0x5A4329); this[x, 15] = rgb(0x5A4329)
+            }
+            for (y in 0 until 16) { this[0, y] = rgb(0x5A4329); this[15, y] = rgb(0x5A4329) }
+            val spines = intArrayOf(rgb(0x9C2B2E), rgb(0x29528A), rgb(0x2E7442), rgb(0xA67824), rgb(0x6F3382), rgb(0x2A6E74))
+            // Top shelf: varied colorful leather tomes with gilded spine bands.
+            var sx = 1
+            while (sx < 11) {
+                val c = pick(spines)
+                val h = 4 + (r() * 2).toInt()
+                for (y in (7 - h)..6) {
+                    this[sx, y] = if (y == 7 - h) shade(c, 1.25f) else if (y == 5) rgb(0xD8B058) else c
+                    if (sx + 1 < 11 && r() < 0.55f) this[sx + 1, y] = shade(c, 0.9f)
+                }
+                sx += if (r() < 0.55f) 2 else 1
+            }
+            // Top right: stacked horizontal folios.
+            rect(11, 4, 14, 4, rgb(0x8C2A2A))
+            rect(11, 5, 14, 5, rgb(0x2E648A))
+            rect(11, 6, 14, 6, rgb(0xD8C69C))
+            // Bottom shelf: parchment scroll cubby + upright books.
+            rect(2, 10, 4, 11, rgb(0xE8D8B0)); rect(3, 10, 3, 11, rgb(0xC2AA78))
+            rect(2, 12, 4, 13, rgb(0xDFCCA0)); rect(3, 12, 3, 13, rgb(0xB89E6A))
+            for (bx in 6..14) {
+                if (bx % 3 == 0 && r() < 0.3f) continue
+                val c = pick(spines)
+                val top = 9 + (r() * 2).toInt()
+                for (y in top..14) this[bx, y] = if (y == top) rgb(0xE2BA64) else c
+            }
+        }
+        tile(Tile.GOLD_CARPET) {
+            noisy(intArrayOf(rgb(0x8E2228), rgb(0x9C2830), rgb(0xA62E36)), cell = 2, grain = 0.5f)
+            for (i in 0 until 16) {
+                val rim = if (i % 2 == 0) rgb(0xE6B84C) else rgb(0xD29E32)
+                this[i, 1] = rim; this[i, 14] = rim; this[1, i] = rim; this[14, i] = rim
+            }
+            for ((cx, cy) in listOf(2 to 2, 13 to 2, 2 to 13, 13 to 13)) this[cx, cy] = rgb(0xF2CE6B)
+        }
+        tile(Tile.FLOWER_POT) {
+            noisy(intArrayOf(rgb(0x9A482F), rgb(0xA85438), rgb(0xB46042)), cell = 4, grain = 0.45f)
+            for (x in 0 until 16) {
+                this[x, 0] = rgb(0xBD6A4A); this[x, 2] = rgb(0x7C3722); this[x, 15] = rgb(0x70301E)
+            }
+        }
+        tile(Tile.CANDLE) {
+            noisy(intArrayOf(rgb(0xEAD89B), rgb(0xF3E5AB), rgb(0xDFC784)), cell = 4, grain = 0.35f)
+            for (x in 0 until 16) {
+                this[x, 0] = rgb(0xF9EEBC); this[x, 1] = rgb(0xF6E5A4)
+                if (x % 5 == 0) this[x, 3] = rgb(0xFFF6D6)
+            }
+        }
+        tile(Tile.GLOBE) {
+            each { x, y ->
+                val land = fbm(x * 0.28f + 1.3f, y * 0.28f + 0.7f, 19)
+                when {
+                    x == 0 || x == 15 || y == 7 -> rgb(0xD9A73E)
+                    land > 0.58f -> rgb(0x529A46)
+                    land > 0.51f -> rgb(0x72AD52)
+                    else -> pick(intArrayOf(rgb(0x245694), rgb(0x2D64A6), rgb(0x1E4A80)))
+                }
+            }
+        }
+        tile(Tile.BRASS) {
+            noisy(intArrayOf(rgb(0xBA8626), rgb(0xD49F38), rgb(0xE4B852)), cell = 4, grain = 0.4f)
+            for (i in 0 until 16) { this[i, 0] = rgb(0xF0CA6C); this[i, 15] = rgb(0x96691B) }
+        }
+        tile(Tile.FLAME) {
+            noisy(intArrayOf(rgb(0xFFB338), rgb(0xFFD65E), rgb(0xFFF2B8)), cell = 2, grain = 0.55f)
         }
 
         strip(Tile.WATER) {

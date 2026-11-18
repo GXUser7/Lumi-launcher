@@ -118,6 +118,7 @@ fun FrameWindowScope.LauncherApp(
     dark: Boolean,
     onClose: () -> Unit,
     closeRequests: Int = 0,
+    autoCheckUpdates: Boolean = true,
     /** Hands the navigation state and the model out once — for the smoke run, which drives them screen by screen. */
     onState: (LauncherState, LauncherModel) -> Unit = { _, _ -> },
 ) {
@@ -136,6 +137,7 @@ fun FrameWindowScope.LauncherApp(
         dragArea = { WindowDraggableArea(Modifier.fillMaxWidth().height(88.dp)) { Box(Modifier.fillMaxSize()) } },
         windowControls = { WindowControls(windowState, it) },
         resizeEdges = { ResizeEdges(windowState) },
+        autoCheckUpdates = autoCheckUpdates,
         onState = onState,
     )
 }
@@ -159,10 +161,11 @@ fun LauncherContent(
     windowControls: @Composable (onClose: () -> Unit) -> Unit = {},
     resizeEdges: @Composable () -> Unit = {},
     startGuide: Boolean = true,
+    autoCheckUpdates: Boolean = true,
     onState: (LauncherState, LauncherModel) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
-    val model = remember { LauncherModel(settings, scope) }
+    val model = remember { LauncherModel(settings, scope, autoCheckUpdates = autoCheckUpdates) }
     val state = remember { LauncherState().also { onState(it, model) } }
     val parallax = remember { Parallax() }
     val backdrop = remember { BackdropGlassState() }
@@ -177,7 +180,11 @@ fun LauncherContent(
 
     // A running server has no window of its own: closing the launcher asks first, then stops it properly.
     var confirmClose by remember { mutableStateOf(false) }
-    val requestClose = { if (model.servers.anyActive) confirmClose = true else onClose() }
+    val finishClose = {
+        model.updater.installOnExitIfReady()
+        onClose()
+    }
+    val requestClose = { if (model.servers.anyActive) confirmClose = true else finishClose() }
     LaunchedEffect(closeRequests) { if (closeRequests > 0) requestClose() }
 
     // Only a minimise the launcher did itself is undone when the game closes.
@@ -271,9 +278,9 @@ fun LauncherContent(
             // Underneath the bar, so the pills keep their clicks and the gaps between them drag the window.
             dragArea()
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-                TopBar(model, state, requestClose, windowControls)
+                TopBar(model, state, requestClose, onClose, windowControls)
             }
-            ScreenCard(model, state, play, Modifier.padding(start = 16.dp, top = 88.dp, bottom = 16.dp))
+            ScreenCard(model, state, play, onClose, Modifier.padding(start = 16.dp, top = 88.dp, bottom = 16.dp))
             // A catalogue's filters, in their own panel right of the card, while its list is on screen.
             val filters = state.filters?.takeIf { state.section == Section.Mods || state.section == Section.Packs }
             var shownFilters by remember { mutableStateOf(filters) }
@@ -330,7 +337,7 @@ fun LauncherContent(
             if (state.microsoftSignIn) MicrosoftSignIn(model, onClose = { state.microsoftSignIn = false })
             state.serverPack?.let { ServerPackDialog(model, it, onJoin = { pack, address -> play(pack, address) }, onClose = { state.serverPack = null }) }
             if (model.feedback.open) FeedbackCard(model.feedback)
-            if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = onClose)
+            if (confirmClose) CloseWithServers(model, onCancel = { confirmClose = false }, onClose = finishClose)
             GuideOverlay(state, settings)
             resizeEdges()
         }
@@ -342,6 +349,7 @@ private fun TopBar(
     model: LauncherModel,
     state: LauncherState,
     onClose: () -> Unit,
+    onExitForUpdate: () -> Unit,
     windowControls: @Composable (onClose: () -> Unit) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -418,6 +426,7 @@ private fun TopBar(
                     state.notificationsOpen = it
                     if (it) state.downloadsOpen = false
                 },
+                onExit = onExitForUpdate,
             )
             val inSettings = state.section == Section.Settings
             IconButton(
@@ -453,7 +462,7 @@ private fun TopBar(
 
 /** The one card every screen lives in; it widens for the screens that list things. */
 @Composable
-private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instance?, String?) -> Unit, modifier: Modifier) {
+private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instance?, String?) -> Unit, onExit: () -> Unit, modifier: Modifier) {
     val target = when (state.section) {
         Section.Home -> 440.dp
         Section.Mods, Section.Packs, Section.Servers -> CATALOG_WIDTH
@@ -466,7 +475,7 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
             transitionSpec = { fadeIn(tween(220, delayMillis = 90)) togetherWith fadeOut(tween(90)) },
         ) { section ->
             when (section) {
-                Section.Home -> HomeScreen(model, state, onPlay = { play(null, null) })
+                Section.Home -> HomeScreen(model, state, onPlay = { play(null, null) }, onExit = onExit)
                 Section.Packs -> PacksScreen(
                     model,
                     state,
@@ -479,7 +488,7 @@ private fun ScreenCard(model: LauncherModel, state: LauncherState, play: (Instan
                     },
                 )
                 Section.Mods -> ModsScreen(model, state, onEditPack = { state.openPacks(PackRequest.Edit(it.id)) })
-                Section.Settings -> SettingsScreen(model, onGuide = { state.guide.start(state) })
+                Section.Settings -> SettingsScreen(model, onGuide = { state.guide.start(state) }, scrollState = state.settingsScroll, onExit = onExit)
                 Section.Console -> ConsoleScreen(model, onBack = { state.section = Section.Home })
                 Section.Servers -> ServersScreen(
                     model,

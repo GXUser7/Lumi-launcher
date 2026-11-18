@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicLong
 internal class Download(val url: String, val target: File, val sha1: String?, val size: Long?)
 
 internal object Http {
+    val USER_AGENT: String = "LumiLauncher/${Support.VERSION} (lumi-launcher)"
+
     private val client: HttpClient = HttpClient.newBuilder()
         .followRedirects(HttpClient.Redirect.NORMAL)
         .connectTimeout(Duration.ofSeconds(15))
@@ -168,7 +170,7 @@ internal object Http {
     private fun request(url: String) = HttpRequest.newBuilder(URI.create(url))
         .timeout(Duration.ofSeconds(60))
         // Modrinth asks every client to identify itself.
-        .header("User-Agent", "LumiLauncher/${Support.VERSION} (lumi-launcher)")
+        .header("User-Agent", USER_AGENT)
 
     private inline fun <T> retry(message: String, block: () -> T): T {
         var failure: Exception? = null

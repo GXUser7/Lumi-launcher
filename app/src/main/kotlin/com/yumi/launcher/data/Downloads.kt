@@ -3,7 +3,7 @@ package com.yumi.launcher.data
 import androidx.compose.runtime.mutableStateListOf
 
 /** Which part of the launcher a download belongs to; the panel picks its glyph by it. */
-enum class DownloadKind { Game, Pack, Content, Server }
+enum class DownloadKind { Game, Pack, Content, Server, Update }
 
 /** Something downloading right now. [progress] is null when only "busy" is known. */
 class ActiveDownload(
@@ -38,6 +38,10 @@ class Downloads(private val model: LauncherModel) {
             for (server in model.servers.all) {
                 val status = model.servers.session(server.id).status as? ServerStatus.Installing ?: continue
                 add(ActiveDownload("server:${server.id}", server.name, status.step, status.fraction, DownloadKind.Server))
+            }
+            (model.updater.state as? AppUpdateState.Downloading)?.let { upd ->
+                val frac = if (upd.total > 0) (upd.downloaded.toFloat() / upd.total).coerceIn(0f, 1f) else null
+                add(ActiveDownload("app-update", "Lumi Launcher ${upd.release.version}", "Обновление лаунчера", frac, DownloadKind.Update, model.updater::cancelDownload))
             }
         }
 

@@ -2,15 +2,23 @@ package com.yumi.launcher.ui.settings
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.selected
+import com.yumi.launcher.data.AppUpdateState
 import com.yumi.launcher.settings.Palette
+import com.yumi.launcher.ui.components.ShapeTile
 import com.yumi.launcher.ui.theme.colorScheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -73,11 +81,16 @@ import com.yumi.launcher.ui.theme.glassInnerBorder
 import java.io.File
 
 @Composable
-fun SettingsScreen(model: LauncherModel, onGuide: () -> Unit = {}) {
+fun SettingsScreen(
+    model: LauncherModel,
+    onGuide: () -> Unit = {},
+    scrollState: ScrollState = rememberScrollState(),
+    onExit: () -> Unit = {},
+) {
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(scrollState), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Настройки", style = type.displaySmall)
         Spacer(Modifier.height(2.dp))
 
@@ -215,6 +228,12 @@ fun SettingsScreen(model: LauncherModel, onGuide: () -> Unit = {}) {
             Hint("Удаление убирает вас у всех друзей и освобождает имя.")
         }
 
+        Group("Обновления")
+        UpdateSection(model, onExit)
+        Label("Автообновление")
+        Choice(listOf(true, false), settings.autoUpdate, { if (it) "Автоматически" else "Вручную" }, { model.updater.setAutoUpdate(it) })
+        Hint("Фоновая проверка релизов на GitHub с обязательной проверкой SHA-256 и установкой при закрытии или по кнопке.")
+
         Group("Поддержка")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = model.feedback::openChat, shapes = ButtonDefaults.shapes()) {
@@ -322,6 +341,146 @@ private fun PaletteSwatch(palette: Palette, picked: Boolean, dark: Boolean, modi
                 }
             }
             Text(palette.label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun UpdateSection(model: LauncherModel, onExit: () -> Unit) {
+    val updater = model.updater
+    val scheme = MaterialTheme.colorScheme
+    val current = updater.state
+    val release = updater.release
+    val canRestart = updater.installed && !model.busy && !model.servers.anyActive
+
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = glassContainer(elevated = true),
+        border = glassInnerBorder(elevated = true),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val isError = current is AppUpdateState.Failed
+                ShapeTile(
+                    Icons.Rounded.SystemUpdateAlt,
+                    if (isError) scheme.errorContainer else scheme.primaryContainer,
+                    if (isError) scheme.onErrorContainer else scheme.onPrimaryContainer,
+                    40.dp,
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (current) {
+                            is AppUpdateState.Ready -> "Готово обновление до ${current.update.release.version}"
+                            is AppUpdateState.Downloading -> "Скачиваем Lumi ${current.release.version}…"
+                            is AppUpdateState.Available -> "Доступен Lumi Launcher ${current.release.version}"
+                            AppUpdateState.Checking -> "Проверяем обновления…"
+                            is AppUpdateState.UpToDate -> "Установлена актуальная версия"
+                            is AppUpdateState.Failed -> "Ошибка обновления"
+                            AppUpdateState.Idle -> "Lumi Launcher ${updater.currentVersion}"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        when (current) {
+                            is AppUpdateState.Ready -> "SHA-256 проверен · файл готов к установке"
+                            is AppUpdateState.Downloading -> {
+                                val doneMb = current.downloaded / (1024f * 1024f)
+                                val totalMb = (current.total.coerceAtLeast(1L)) / (1024f * 1024f)
+                                "%.1f из %.1f МБ".format(doneMb, totalMb)
+                            }
+                            is AppUpdateState.Available -> "Установлена ${updater.currentVersion} · размер %.1f МБ".format(current.release.size / (1024f * 1024f))
+                            AppUpdateState.Checking -> "Сверяемся с GitHub Releases…"
+                            is AppUpdateState.UpToDate -> "Версия ${updater.currentVersion} — последняя"
+                            is AppUpdateState.Failed -> current.message
+                            AppUpdateState.Idle -> if (updater.installed) "Текущая версия ${updater.currentVersion}" else "Портативный режим — доступна ручная установка"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (current is AppUpdateState.Failed) scheme.error else scheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (current is AppUpdateState.Downloading) {
+                val progress = if (current.total > 0) (current.downloaded.toFloat() / current.total).coerceIn(0f, 1f) else null
+                if (progress != null) LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                else LinearWavyProgressIndicator(Modifier.fillMaxWidth())
+            }
+
+            val cleanNotes = release?.notes
+                ?.lineSequence()
+                ?.filterNot { it.trim().startsWith("SHA-256", ignoreCase = true) }
+                ?.joinToString("\n")
+                ?.trim()
+                .orEmpty()
+            if (cleanNotes.isNotEmpty() && (current is AppUpdateState.Available || current is AppUpdateState.Ready)) {
+                Text(
+                    cleanNotes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when (current) {
+                    is AppUpdateState.Ready -> {
+                        if (updater.installed) {
+                            Button(
+                                onClick = { updater.installNow(onExit) },
+                                enabled = canRestart,
+                                shapes = ButtonDefaults.shapes(),
+                            ) { Text("Перезапустить и обновить") }
+                        } else {
+                            OutlinedButton(
+                                onClick = { Support.open(current.update.release.installerUrl) },
+                                shapes = ButtonDefaults.shapes(),
+                            ) {
+                                Icon(Icons.Rounded.SystemUpdateAlt, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Скачать установщик")
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { Support.open(current.update.release.pageUrl) },
+                            shapes = ButtonDefaults.shapes(),
+                        ) {
+                            Icon(Icons.Rounded.OpenInNew, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Что нового")
+                        }
+                    }
+                    is AppUpdateState.Downloading -> {
+                        OutlinedButton(onClick = updater::cancelDownload, shapes = ButtonDefaults.shapes()) { Text("Отменить") }
+                    }
+                    is AppUpdateState.Available -> {
+                        if (updater.installed) {
+                            Button(onClick = updater::download, shapes = ButtonDefaults.shapes()) { Text("Скачать обновление") }
+                        } else {
+                            Button(onClick = { Support.open(current.release.installerUrl) }, shapes = ButtonDefaults.shapes()) { Text("Скачать установщик") }
+                        }
+                        OutlinedButton(onClick = { Support.open(current.release.pageUrl) }, shapes = ButtonDefaults.shapes()) { Text("Что нового") }
+                    }
+                    else -> {
+                        OutlinedButton(
+                            onClick = { updater.check(manual = true) },
+                            enabled = current !is AppUpdateState.Checking,
+                            shapes = ButtonDefaults.shapes(),
+                        ) {
+                            Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (current is AppUpdateState.Failed) "Повторить" else "Проверить обновления")
+                        }
+                        if (current is AppUpdateState.Failed && current.release != null && updater.installed) {
+                            OutlinedButton(onClick = updater::download, shapes = ButtonDefaults.shapes()) { Text("Скачать снова") }
+                        }
+                    }
+                }
+            }
+            if (current is AppUpdateState.Ready && updater.installed && !canRestart) {
+                Hint("Остановите игру или серверы, чтобы применить обновление.")
+            }
         }
     }
 }

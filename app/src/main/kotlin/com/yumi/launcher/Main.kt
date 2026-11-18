@@ -79,6 +79,7 @@ fun main(args: Array<String>) {
         "--world-test" -> exitProcess(worldTest(args.drop(1)))
         "--friends-test" -> exitProcess(friendsTest(args.drop(1)))
         "--content-test" -> exitProcess(contentTest(args.drop(1)))
+        "--update-test" -> exitProcess(updateTest())
         "--scene-shot" -> exitProcess(sceneShot(args.drop(1)))
         "--headless-smoke" -> exitProcess(headlessSmoke(args.drop(1)))
     }
@@ -471,6 +472,7 @@ private fun launcher(args: Array<String>) = application {
         LauncherTheme(dark, settings.palette) {
             LauncherApp(
                 windowState, settings, dark, onClose = ::exitApplication, closeRequests = closeRequests,
+                autoCheckUpdates = !smoke,
                 onState = { navigation, model -> smokeState = navigation; smokeModel = model },
             )
         }

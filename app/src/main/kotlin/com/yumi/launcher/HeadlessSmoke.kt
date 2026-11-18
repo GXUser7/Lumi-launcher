@@ -3,8 +3,11 @@ package com.yumi.launcher
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import com.yumi.launcher.core.AppRelease
 import com.yumi.launcher.core.LauncherPaths
 import com.yumi.launcher.core.SkippedFile
+import com.yumi.launcher.core.VerifiedUpdate
+import com.yumi.launcher.data.AppUpdateState
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.ServerStatus
 import com.yumi.launcher.scene.sharedIslandScene
@@ -75,6 +78,7 @@ internal fun headlessSmoke(args: List<String>): Int {
                     dark = dark,
                     shaders = false,
                     startGuide = false,
+                    autoCheckUpdates = false,
                     onState = { state, appModel ->
                         nav = state
                         model = appModel
@@ -160,6 +164,30 @@ internal fun headlessSmoke(args: List<String>): Int {
                     settings.palette = Palette.Original
                     state.section = Section.Home
                 }
+                val smokeInstaller = File(configRoot, "cache/updates/Lumi-Launcher-1.4-windows-x64-setup.exe").apply {
+                    parentFile.mkdirs()
+                    writeText("smoke-update-payload")
+                }
+                val smokeRelease = AppRelease(
+                    version = "1.4",
+                    tag = "1.4",
+                    notes = "Улучшенная библиотека, автоапдейтер с проверкой SHA-256 и свежие штрихи интерфейса.",
+                    installerName = smokeInstaller.name,
+                    installerUrl = "https://github.com/GXUser7/Lumi-launcher/releases/download/1.4/${smokeInstaller.name}",
+                    checksumUrl = null,
+                    inlineSha256 = "0".repeat(64),
+                    size = smokeInstaller.length(),
+                    pageUrl = "https://github.com/GXUser7/Lumi-launcher/releases/tag/1.4",
+                )
+                shot("home-update-dark", frames = 22) {
+                    settings.theme = ThemeMode.Dark
+                    settings.palette = Palette.Original
+                    state.notificationsOpen = false
+                    state.downloadsOpen = false
+                    appModel.updater.state = AppUpdateState.Ready(VerifiedUpdate(smokeRelease, smokeInstaller, "0".repeat(64)))
+                    state.section = Section.Home
+                }
+                appModel.updater.state = AppUpdateState.UpToDate(System.currentTimeMillis())
                 shot("notifications-dark", frames = 18) {
                     settings.theme = ThemeMode.Dark
                     state.section = Section.Home
@@ -235,6 +263,22 @@ internal fun headlessSmoke(args: List<String>): Int {
                     settings.palette = Palette.Original
                     state.section = Section.Settings
                 }
+                shot("settings-updates-dark", frames = 24) {
+                    settings.theme = ThemeMode.Dark
+                    settings.palette = Palette.Original
+                    appModel.updater.state = AppUpdateState.Ready(VerifiedUpdate(smokeRelease, smokeInstaller, "0".repeat(64)))
+                    state.section = Section.Settings
+                }
+                if (state.settingsScroll.maxValue > 0 && (only == null || only.any { it in "settings-updates-dark" })) {
+                    state.settingsScroll.scrollTo(state.settingsScroll.maxValue)
+                    shot("settings-updates-dark", frames = 8) {
+                        settings.theme = ThemeMode.Dark
+                        state.section = Section.Settings
+                    }
+                    state.settingsScroll.scrollTo(0)
+                }
+                smokeInstaller.delete()
+                appModel.updater.state = AppUpdateState.Idle
                 shot("palette-pink-light", frames = 24) {
                     settings.theme = ThemeMode.Light
                     settings.palette = Palette.Pink

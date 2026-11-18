@@ -1,7 +1,7 @@
 ; Lumi Launcher's installer. Built by scripts/build-installer.ps1 from the application image that
 ; `:app:createDistributable` makes: the launcher with its own Java, nothing else to install first.
 
-#define AppVersion "1.2"
+#define AppVersion "1.3"
 #define AppImage "..\app\build\compose\binaries\main\app\LumiLauncher"
 #define AppExe "LumiLauncher.exe"
 
@@ -67,3 +67,51 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,Lumi Launcher}"; Fl
 ; Nothing of the player's is removed on uninstall: the settings, %APPDATA%\LumiLauncher (YumiLauncher
 ; for players from before 1.1) and the game folder with its worlds stay, and a reinstall picks them
 ; up where they were.
+
+[Code]
+function OpenProcess(dwDesiredAccess: DWORD; bInheritHandle: BOOL; dwProcessId: DWORD): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(hHandle: THandle; dwMilliseconds: DWORD): DWORD;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(hObject: THandle): BOOL;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+procedure WaitForLauncherExit();
+var
+  PidStr: String;
+  Pid: LongInt;
+  Proc: THandle;
+begin
+  if ExpandConstant('{param:LUMIUPDATE|0}') <> '1' then
+    Exit;
+  PidStr := ExpandConstant('{param:LUMIPID|0}');
+  Pid := StrToIntDef(PidStr, 0);
+  if Pid <= 0 then
+    Exit;
+  // SYNCHRONIZE = $00100000: wait until the running LumiLauncher.exe terminates so app files unlock.
+  Proc := OpenProcess($00100000, False, Pid);
+  if Proc <> 0 then begin
+    try
+      WaitForSingleObject(Proc, 30000);
+    finally
+      CloseHandle(Proc);
+    end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  WaitForLauncherExit();
+  Result := '';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if (CurStep = ssDone) and
+     (ExpandConstant('{param:LUMIUPDATE|0}') = '1') and
+     (ExpandConstant('{param:LUMIRESTART|0}') = '1') then begin
+    Exec(ExpandConstant('{app}\{#AppExe}'), '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+  end;
+end;

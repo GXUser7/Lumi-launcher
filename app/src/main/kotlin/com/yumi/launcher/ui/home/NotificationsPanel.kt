@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.NotificationsNone
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.yumi.launcher.core.Support
+import com.yumi.launcher.data.AppUpdateState
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PlayStatus
 import com.yumi.launcher.data.ServerStatus
@@ -75,9 +78,10 @@ fun NotificationsButton(
     open: Boolean,
     onOpenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    onExit: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
-    val entries = collectNotifications(model, state) { onOpenChange(false) }
+    val entries = collectNotifications(model, state, onExit) { onOpenChange(false) }
     var seenIds by remember { mutableStateOf(emptySet<String>()) }
     val unread = entries.count { it.id !in seenIds }
 
@@ -122,8 +126,62 @@ fun NotificationsButton(
 private fun collectNotifications(
     model: LauncherModel,
     state: LauncherState,
+    onExit: () -> Unit,
     close: () -> Unit,
 ): List<NotificationEntry> = buildList {
+    when (val upd = model.updater.state) {
+        is AppUpdateState.Ready -> {
+            val ver = upd.update.release.version
+            val canInstall = model.updater.installed && !model.busy && !model.servers.anyActive
+            add(
+                NotificationEntry(
+                    id = "update-ready:$ver",
+                    title = "Обновление Lumi $ver готово",
+                    detail = if (canInstall) "Нажмите, чтобы перезапустить и обновить" else "Откройте настройки, чтобы применить обновление",
+                    icon = Icons.Rounded.SystemUpdateAlt,
+                    onClick = {
+                        if (canInstall && model.updater.installNow(onExit)) {
+                            close()
+                        } else {
+                            state.section = Section.Settings
+                            close()
+                        }
+                    },
+                ),
+            )
+        }
+        is AppUpdateState.Available -> add(
+            NotificationEntry(
+                id = "update-avail:${upd.release.version}",
+                title = "Вышел Lumi Launcher ${upd.release.version}",
+                detail = if (model.updater.installed) "Нажмите, чтобы скачать и проверить SHA-256" else "Нажмите, чтобы открыть страницу релиза",
+                icon = Icons.Rounded.SystemUpdateAlt,
+                onClick = {
+                    if (model.updater.installed) {
+                        model.updater.download()
+                    } else {
+                        Support.open(upd.release.pageUrl)
+                    }
+                    state.section = Section.Settings
+                    close()
+                },
+            ),
+        )
+        is AppUpdateState.Failed -> add(
+            NotificationEntry(
+                id = "update-fail:${upd.message}:${upd.release?.version ?: ""}",
+                title = "Ошибка обновления",
+                detail = upd.message,
+                icon = Icons.Rounded.WarningAmber,
+                isError = true,
+                onClick = {
+                    state.section = Section.Settings
+                    close()
+                },
+            ),
+        )
+        else -> Unit
+    }
     val failedPlay = model.status as? PlayStatus.Failed
     if (failedPlay != null) {
         add(

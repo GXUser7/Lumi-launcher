@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Downloading
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -190,6 +191,7 @@ private fun glyph(kind: DownloadKind) = when (kind) {
     DownloadKind.Pack -> Icons.Rounded.ViewInAr
     DownloadKind.Content -> Icons.Rounded.Extension
     DownloadKind.Server -> Icons.Rounded.Dns
+    DownloadKind.Update -> Icons.Rounded.SystemUpdateAlt
 }
 
 private val TIME = DateTimeFormatter.ofPattern("HH:mm")

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.UnfoldMore
@@ -56,6 +58,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.yumi.launcher.core.Support
+import com.yumi.launcher.data.AppUpdateState
 import com.yumi.launcher.data.Instance
 import com.yumi.launcher.data.LauncherModel
 import com.yumi.launcher.data.PlayStatus
@@ -72,7 +76,7 @@ import com.yumi.launcher.ui.theme.glassInnerBorder
 import kotlinx.coroutines.delay
 
 @Composable
-fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit) {
+fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit, onExit: () -> Unit = {}) {
     val settings = model.settings
     val scheme = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
@@ -101,8 +105,74 @@ fun HomeScreen(model: LauncherModel, state: LauncherState, onPlay: () -> Unit) {
         }
         Label("Сборка")
         Box(Modifier.guide(state, GuideAnchor.Pack)) { PackSelector(model, state) }
+        UpdateBanner(model, state, onExit)
         Spacer(Modifier.weight(1f))
         Box(Modifier.guide(state, GuideAnchor.Play)) { PlayRow(model, state, onPlay) }
+    }
+}
+
+@Composable
+private fun UpdateBanner(model: LauncherModel, state: LauncherState, onExit: () -> Unit) {
+    val updater = model.updater
+    val current = updater.state
+    if (current !is AppUpdateState.Ready && current !is AppUpdateState.Available) return
+    val scheme = MaterialTheme.colorScheme
+    val release = updater.release ?: return
+    val canApplyNow = current is AppUpdateState.Ready && updater.installed && !model.busy && !model.servers.anyActive
+    Surface(
+        onClick = { state.section = Section.Settings },
+        shape = RoundedCornerShape(20.dp),
+        color = glassContainer(elevated = true),
+        border = BorderStroke(1.dp, scheme.primary.copy(alpha = 0.45f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ShapeTile(Icons.Rounded.SystemUpdateAlt, scheme.primaryContainer, scheme.onPrimaryContainer, 36.dp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (current is AppUpdateState.Ready) "Обновление ${release.version} готово" else "Доступен Lumi ${release.version}",
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    when {
+                        current is AppUpdateState.Ready && canApplyNow -> "Проверено SHA-256 · установится за пару секунд"
+                        current is AppUpdateState.Ready && !updater.installed -> "Нажмите, чтобы открыть настройки"
+                        current is AppUpdateState.Ready -> "Остановите игру или сервер для установки"
+                        else -> "Новая версия готова к загрузке"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButton(
+                onClick = {
+                    when {
+                        current is AppUpdateState.Ready && canApplyNow -> updater.installNow(onExit)
+                        current is AppUpdateState.Ready -> state.section = Section.Settings
+                        updater.installed -> updater.download()
+                        else -> Support.open(release.installerUrl)
+                    }
+                },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    when {
+                        current is AppUpdateState.Ready && canApplyNow -> "Обновить"
+                        current is AppUpdateState.Ready -> "Открыть"
+                        updater.installed -> "Скачать"
+                        else -> "Сайт"
+                    },
+                )
+            }
+        }
     }
 }
 
